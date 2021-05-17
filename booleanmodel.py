@@ -222,7 +222,14 @@ def update_progress(progress):
     sys.stdout.write(text)
     sys.stdout.flush()
 
-"""An `InvertedIndex` object contains a dictionary with as keys the words and as values the `Term` associated to that word, which, we reall, contains the `PostingList` associated to the word."""
+"""An `InvertedIndex` object contains a dictionary with as keys the words and as values the `Term` associated to that word, which, we reall, contains the `PostingList` associated to the word.
+
+#### Data structure
+
+Python dictionaries aren’t always what you need: the most important case is where you want to store a very large mapping. When a Python dictionary is accessed, the whole dictionary has to be unpickled and brought into memory.
+
+BTrees are a balanced tree data structure that behave like a binary tree but distribute keys throughout a number of tree nodes and each node has between $a$ and $b$ children. The nodes are stored in sorted order. Nodes are then only unpickled and brought into memory as they’re accessed, so the entire tree doesn’t have to occupy memory (unless you really are touching every single key).
+"""
 
 class InvertedIndex:
     
@@ -258,7 +265,9 @@ class InvertedIndex:
 
 """## Reading the Corpus
 
-A `MovieDescription` object has a title and a description.
+A `MovieDescription` object has a title and a description.  We have some comparison methods to check if two `MovieDescription`s are equal or one is greater then the other, etc. The function `hash` computes the hash of a `MovieDescription` using the hash of its title and its description.
+
+We have implemented the comparison methods to make `MovieDescription` a sortable object (so we can iterate on it), and the `hash` method to make it hashable (so we can put it in a `set`).
 """
 
 @total_ordering
@@ -273,6 +282,9 @@ class MovieDescription:  # container for all the info we have about the movie
     
     def __gt__(self, other: 'MovieDescription'):
         return self.title > other.title
+
+    def __hash__(self):
+      return hash((self.title, self.description))
         
     def __repr__(self):
         return self.title
@@ -378,8 +390,6 @@ print(f"Time: {round(toc-tic, 3)}s")
 
 print(idx2)
 
-idx['batman']  # all the docIDs containing 'batman' in the description!
-
 ir = IRsystem(corpus, idx)
 
 """### AND queries"""
@@ -459,6 +469,11 @@ for i in range(len(all_query_uniq)):
         print(f"{all_query_uniq[i].title:<30}\t --  {my_or_query_unique[i]}")
         print(f"{all_query_uniq[i+1].title:<30}\t --  {my_or_query_unique[i+1]}")
         break
+
+print(type(corpus[0]))
+hash(corpus[0])
+
+set(all_query)
 
 errors = {'love': 7, 'mother': 2, 'father': 7, 'cat': 1, 'me': 1}
 
