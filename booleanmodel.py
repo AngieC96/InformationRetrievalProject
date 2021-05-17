@@ -473,7 +473,15 @@ for i in range(len(all_query_uniq)):
 print(type(corpus[0]))
 hash(corpus[0])
 
-set(all_query)
+tic = time.time()
+all_query_uniq = set(all_query)
+toc = time.time()
+print(f"Time: {round(toc-tic, 3)}s")
+
+tic = time.time()
+all_query_uniq = make_unique(all_query)
+toc = time.time()
+print(f"Time: {round(toc-tic, 3)}s")
 
 errors = {'love': 7, 'mother': 2, 'father': 7, 'cat': 1, 'me': 1}
 
