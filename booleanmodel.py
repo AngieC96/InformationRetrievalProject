@@ -361,10 +361,10 @@ def or_query(ir, text, noprint=True):
 
 corpus = read_movie_descriptions()
 
-tic = time.time()
-idx = InvertedIndex.from_corpus(corpus)
-toc = time.time()
-print(f"\n\nTime: {round(toc-tic, 3)}s")
+#tic = time.time()
+#idx = InvertedIndex.from_corpus(corpus)
+#toc = time.time()
+#print(f"\n\nTime: {round(toc-tic, 3)}s")
 
 print(idx)
 
@@ -376,9 +376,9 @@ We will save the index using `Pickle`. `Pickle` is used for serializing and de-s
 filename = "index"
 
 # save the index
-outfile = open(filename, 'wb')
-pickle.dump(idx, outfile)
-outfile.close()
+#outfile = open(filename, 'wb')
+#pickle.dump(idx, outfile)
+#outfile.close()
 
 # load the index
 tic = time.time()
@@ -386,6 +386,8 @@ infile = open(filename, 'rb')
 idx2 = pickle.load(infile)
 infile.close()
 toc = time.time()
+
+print("Index loaded.")
 print(f"Time: {round(toc-tic, 3)}s")
 
 print(idx2)
@@ -396,145 +398,39 @@ ir = IRsystem(corpus, idx)
 
 and_query(ir, "frodo Gandalf")
 
+and_query(ir, "yoda luke darth")
+
 try:
     and_query(ir, "thig")
 except KeyError:
     print(sys.exc_info()[1])
 
-and_query(ir, "yoda luke darth")
+# 'assert' for the and query result
 
 """### OR queries"""
 
 or_query(ir, "frodo yoda")
-
-
 
 frodo_query = and_query(ir, "frodo")
 yoda_query = and_query(ir, "yoda")
 frodo_or_yoda_query = or_query(ir, "frodo yoda")
 # frodo_query.extend(yoda_query)  # then print 'frodo_query' !!!!
 frodo_p_yoda_query = frodo_query + yoda_query
-assert sorted(frodo_p_yoda_query) == sorted(frodo_or_yoda_query)
 
-def make_unique(original_list: list):
-    unique_list = []
-    [unique_list.append(obj) for obj in original_list if obj not in unique_list]
-    return unique_list
+assert set(frodo_p_yoda_query) == set(frodo_or_yoda_query)
 
 frodo_query = and_query(ir, "frodo")
 yoda_query = and_query(ir, "yoda")
 third_query = and_query(ir, "gandalf")
-my_or_query = sorted(or_query(ir, "frodo yoda gandalf"))
-all_query = sorted(frodo_query + yoda_query + third_query)
+my_or_query = set(or_query(ir, "frodo yoda gandalf"))
+all_query = set(frodo_query + yoda_query + third_query)
 
-#all_query = make_unique(all_query)
-print(len(frodo_query), len(yoda_query), len(third_query))
-print(len(all_query), len(make_unique(all_query)), len(my_or_query))
-
-print(sorted(frodo_query))
-print("-----------")
-print(sorted(yoda_query))
-print("-----------")
-print(sorted(third_query))
-print("-----------")
-print(sorted(my_or_query))
+assert all_query == my_or_query
 
 frodo_query = and_query(ir, "frodo")
 yoda_query = and_query(ir, "yoda")
 third_query = and_query(ir, "love")
-my_or_query = sorted(or_query(ir, "frodo yoda love"))
-all_query = sorted(frodo_query + yoda_query + third_query)
-#all_query = make_unique(all_query)
+my_or_query = set(or_query(ir, "frodo yoda love"))
+all_query = set(frodo_query + yoda_query + third_query)
 
-#print(sorted(frodo_query))
-#print("-----------")
-#print(sorted(yoda_query))
-#print("-----------")
-#print(sorted(catwoman_query))
-#print("-----------")
-#print(sorted(my_or_query))
-
-print(len(frodo_query), len(yoda_query), len(third_query))
-print(len(all_query), len(my_or_query))
-
-all_query_uniq = make_unique(all_query)
-my_or_query_unique = make_unique(my_or_query)
-print(len(all_query_uniq), len(my_or_query_unique))
-
-assert sorted(all_query_uniq) == sorted(my_or_query_unique)
-
-for i in range(len(all_query_uniq)):
-    if all_query_uniq[i] != my_or_query_unique[i]:
-        print(f"{all_query_uniq[i-1].title:<30}\t --  {my_or_query_unique[i-1]}")
-        print(f"{all_query_uniq[i].title:<30}\t --  {my_or_query_unique[i]}")
-        print(f"{all_query_uniq[i+1].title:<30}\t --  {my_or_query_unique[i+1]}")
-        break
-
-print(type(corpus[0]))
-hash(corpus[0])
-
-tic = time.time()
-all_query_uniq = set(all_query)
-toc = time.time()
-print(f"Time: {round(toc-tic, 3)}s")
-
-tic = time.time()
-all_query_uniq = make_unique(all_query)
-toc = time.time()
-print(f"Time: {round(toc-tic, 3)}s")
-
-errors = {'love': 7, 'mother': 2, 'father': 7, 'cat': 1, 'me': 1}
-
-missing_titles = []
-for i in range(len(my_or_query)):
-    if all_query[i] != my_or_query[i]:
-        missing_titles.append(all_query[i])
-        print(f"{all_query[i-1].title:<30}\t --  {my_or_query[i-1]}")
-        print(f"{all_query[i].title:<30}\t --  {my_or_query[i]}")
-        print(f"{all_query[i+1].title:<30}\t --  {my_or_query[i+1]}")
-        break
-
-print(f"\nSecond missing word:")
-for j in range(i+1,len(my_or_query)):
-    if all_query[j] != my_or_query[j-1]:
-        missing_titles.append(all_query[j])
-        print(f"{all_query[j-1].title:<30}\t --  {my_or_query[j-2]}")
-        print(f"{all_query[j].title:<30}\t --  {my_or_query[j-1]}")
-        print(f"{all_query[j+1].title:<30}\t --  {my_or_query[j]}")
-        break
-
-print(missing_titles)
-
-for i, movie in enumerate(corpus):
-    if movie == missing_titles[0]:
-    # if movie.title == missing_titles[0].title:
-        print(f"Found: {missing_titles[0].title} in {i} → {corpus[i]}")
-
-print("\nmy_or_query")
-for i, movie in enumerate(my_or_query):
-    if movie == missing_titles[0]:
-        print(f"Found: {missing_titles[0].title} in {i} → {my_or_query[i]}")
-
-print("\nall_query")
-for i, movie in enumerate(all_query):
-    if movie == missing_titles[0]:
-        print(f"Found: {missing_titles[0].title} in {i} → {all_query[i]}")
-        
-print("\nfrodo_query")
-for i, movie in enumerate(frodo_query):
-    if movie == missing_titles[0]:
-        print(f"Found: {missing_titles[0].title} in {i} → {frodo_query[i]}")
-        
-print("\nyoda_query")
-for i, movie in enumerate(yoda_query):
-    if movie == missing_titles[0]:
-        print(f"Found: {missing_titles[0].title} in {i} → {yoda_query[i]}")
-
-print("\nthirs_query")
-for i, movie in enumerate(third_query):
-    if movie == missing_titles[0]:
-        print(f"Found: {missing_titles[0].title} in {i} → {third_query[i]}")
-        
-print(len(make_unique(all_query)), len(make_unique(my_or_query)))
-
-print(len(corpus), len(make_unique(corpus)))
+assert all_query == my_or_query
