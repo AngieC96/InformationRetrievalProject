@@ -57,6 +57,8 @@ A `PostingList` object is a list of `Posting`s. You can construct an empty `Post
 """
 
 class PostingList:
+
+    _postings: list
     
     def __init__(self):
         """ Class constructor.
@@ -151,6 +153,8 @@ class ImpossibleMergeError(Exception):
 
 @total_ordering  # to have all the ordering methods defined automatically
 class Term:
+
+    posting_list: PostingList
     
     def __init__(self, term, docID):   # we create a term with a DocID, we sort them and we merge the equal terms
         self.term = term
@@ -231,7 +235,11 @@ Python dictionaries aren’t always what you need: the most important case is wh
 BTrees are a balanced tree data structure that behave like a binary tree but distribute keys throughout a number of tree nodes and each node has between $a$ and $b$ children. The nodes are stored in sorted order. Nodes are then only unpickled and brought into memory as they’re accessed, so the entire tree doesn’t have to occupy memory (unless you really are touching every single key).
 """
 
+from typing import List
+
 class InvertedIndex:
+
+    _dictionary: List
     
     def __init__(self):
         self._dictionary = {}  # initially the inverted index dictionary is empty
@@ -273,7 +281,7 @@ We have implemented the comparison methods to make `MovieDescription` a sortable
 @total_ordering
 class MovieDescription:  # container for all the info we have about the movie
     
-    def __init__(self, title, description):
+    def __init__(self, title: str, description: str):
         self.title = title
         self.description = description
         
@@ -316,29 +324,32 @@ An `IRsystem` object contains the entire corpus and the `InvertedIndex`.
 """
 
 class IRsystem:
+
+    _corpus: list
+    _index: InvertedIndex
     
-    def __init__(self, corpus, index):
+    def __init__(self, corpus: list, index: 'InvertedIndex'):
         self._corpus = corpus
         self._index = index
         
     @classmethod
-    def from_corpus(cls, corpus): # generate the entire inverted index calling the constructor
+    def from_corpus(cls, corpus: list): # generate the entire inverted index calling the constructor
         index = InvertedIndex.from_corpus(corpus)
         return cls(corpus, index)  # retrun the constructor when we have yet the index
     
-    def answer_and_query(self, words):  # For now only queries with AND. We have a list of words like ['cat', 'batman']
+    def answer_and_query(self, words: List[str]):  # We have a list of words like ['cat', 'batman']
         norm_words = map(normalize, words)  # Normalize all the words. IMPORTANT!!! If the user uses upper-case we will not have ANY match! We have to perform the same normalization of the docs in the corpus on the query!
         postings = map(lambda w: self._index[w], norm_words) # get the posting list for each word → list of posting lists
         plist = reduce(lambda x, y: x.intersection(y), postings)  # apply the function to the two items of the list, then apply it to the result with the third, then the result with the fourt term and so on until the end of the list
         return plist.get_from_corpus(self._corpus) # retrun the documents
     
-    def answer_or_query(self, words):
+    def answer_or_query(self, words: List[str]):
         norm_words = map(normalize, words)
         postings = map(lambda w: self._index[w], norm_words)
         plist = reduce(lambda x, y: x.union(y), postings)
         return plist.get_from_corpus(self._corpus)
 
-def and_query(ir, text, noprint=True):
+def and_query(ir: IRsystem, text: str, noprint=True):
     words = text.split()
     answer = ir.answer_and_query(words)  # list of documents
     if not noprint:
@@ -346,7 +357,7 @@ def and_query(ir, text, noprint=True):
             print(movie)
     return answer
         
-def or_query(ir, text, noprint=True):
+def or_query(ir: IRsystem, text: str, noprint=True):
     words = text.split()
     answer = ir.answer_or_query(words)
     if not noprint:
@@ -361,10 +372,10 @@ def or_query(ir, text, noprint=True):
 
 corpus = read_movie_descriptions()
 
-#tic = time.time()
-#idx = InvertedIndex.from_corpus(corpus)
-#toc = time.time()
-#print(f"\n\nTime: {round(toc-tic, 3)}s")
+tic = time.time()
+idx = InvertedIndex.from_corpus(corpus)
+toc = time.time()
+print(f"\n\nTime: {round(toc-tic, 3)}s")
 
 print(idx)
 
@@ -376,9 +387,9 @@ We will save the index using `Pickle`. `Pickle` is used for serializing and de-s
 filename = "index"
 
 # save the index
-#outfile = open(filename, 'wb')
-#pickle.dump(idx, outfile)
-#outfile.close()
+outfile = open(filename, 'wb')
+pickle.dump(idx, outfile)
+outfile.close()
 
 # load the index
 tic = time.time()
