@@ -462,7 +462,7 @@ def and_query_sc(ir: IRsystem, text: str, noprint=True):
             print(movie)
     return answer
 
-def or_query(ir: IRsystem, text: str, noprint=True):
+def or_query_sc(ir: IRsystem, text: str, noprint=True):
     words = text.split()
     answer = ir.answer_or_query_sc(words)
     if not noprint:
@@ -572,3 +572,9 @@ fyl_or_query = or_query(ir, "frodo yoda love")
 fyl_or_set = set(frodo_query + yoda_query + love_query)
 
 assert set(fyl_or_query) == fyl_or_set
+
+"""### OR queries with spelling correction"""
+
+mispelled_or_query = or_query_sc(ir, "frodoo yioda ganalf", noprint=False)
+
+assert fyg_or_query == mispelled_or_query
