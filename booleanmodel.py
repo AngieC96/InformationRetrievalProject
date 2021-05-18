@@ -14,6 +14,7 @@ import csv     # for csv files
 import re      # for regular expressions
 import pickle  # to save the index
 import time
+import os.path
 
 """## Postings
 
@@ -326,15 +327,15 @@ def read_movie_descriptions():
 By computing the edit distance we can find the set of words that are the closest to a misspelled word. However, computing the edit distance on the entire dictionary can be too expensive. We can use some heuristics to limit the number of words, like looking only at words with the same initial letter (hopefully this has not been misspelled).
 """
 
-def edit_distance(u, v):
+def edit_distance(u, v, print = False):
     """ Computes the edit (or Levenshtein) distance between two words u and v.
     """
     nrows = len(u) + 1
     ncols = len(v) + 1
-    M = [[0] * ncols for i in range(0, nrows)]
-    for i in range(0, nrows):
+    M = [[0] * ncols for i in range(0, nrows)]  # matrix all filled with zeros
+    for i in range(0, nrows):  # we fill the first row, the trivial one
         M[i][0] = i
-    for j in range(0, ncols):
+    for j in range(0, ncols):  # we fill the first col, the trivial one
         M[0][j] = j
     for i in range(1, nrows):
         for j in range(1, ncols):
@@ -347,14 +348,19 @@ def edit_distance(u, v):
             # To print the distance matrix
             if print:
                 print(M[i][j], end="\t")
-        print()
-    return M[-1][-1]
+        if print:
+          print()
+    return M[-1][-1]  # Bottom right element of M (-1 means the last element)
 
 def find_nearest(word, dictionary, keep_first=False):
     if keep_first:
+        # If keep_first is true then we only search across the words in the dictionary starting with the same letter
         dictionary = [w for w in dictionary if w[0] == word[0]]
+    # Remove comment to see the reduction in the size of the dictionary when keeping fixed the first letter
+    #print(len(dictionary))
+    # Apply f(x) = edit_distance(word, x) to all words in the dictionary
     distances = map(lambda x: edit_distance(word, x), dictionary)
-    # [(45, "aaa"), ...] 
+    # Produce all the pairs (distance, term) usng zip and find one with the minimal distance.
     return min(zip(distances, dictionary))[1]
 
 """## IR System
@@ -398,6 +404,7 @@ class IRsystem:
                 print("{} not found. Did you mean {}?".format(w, sub))
                 res = self._index[sub]
             postings.append(res)
+        print()
         plist = reduce(lambda x, y: x.intersection(y), postings)
         return plist.get_from_corpus(self._corpus)
     
@@ -423,6 +430,7 @@ class IRsystem:
                 print("{} not found. Did you mean {}?".format(w, sub))
                 res = self._index[sub]
             postings.append(res)
+        print()
         plist = reduce(lambda x, y: x.union(y), postings)
         return plist.get_from_corpus(self._corpus)
 
@@ -469,83 +477,98 @@ def or_query(ir: IRsystem, text: str, noprint=True):
 
 corpus = read_movie_descriptions()
 
-#tic = time.time()
-#idx = InvertedIndex.from_corpus(corpus)
-#toc = time.time()
-#print(f"\n\nTime: {round(toc-tic, 3)}s")
-
-print(idx)
-
 """#### Saving / loading the index
 
 We will save the index using `Pickle`. `Pickle` is used for serializing and de-serializing Python object structures, also called marshalling or flattening. Serialization refers to the process of converting an object in memory to a byte stream that can be stored on disk or sent over a network. Later on, this character stream can then be retrieved and de-serialized back to a Python object.
 """
 
-filename = "index"
+updated = True
 
-# save the index
-#outfile = open(filename, 'wb')
-#pickle.dump(idx, outfile)
-#outfile.close()
+filename = "index.pickle"
 
-# load the index
-#tic = time.time()
-#infile = open(filename, 'rb')
-#idx = pickle.load(infile)
-#infile.close()
-#toc = time.time()
+# If the index is saved and it is updated I load it, otherwise I create it and save it
+if os.path.isfile(filename) and updated:
+    print ("Index file exists. Loading the index...")
+    # load the index
+    tic = time.time()
+    infile = open(filename, 'rb')
+    idx = pickle.load(infile)
+    infile.close()
+    toc = time.time()
+    print("Index loaded.")
+    print(f"Time: {round(toc-tic, 3)}s")
+else:
+    print ("Index file does not exist.")
+    tic = time.time()
+    idx = InvertedIndex.from_corpus(corpus)
+    toc = time.time()
+    print(f"\n\nTime: {round(toc-tic, 3)}s")
+    # save the index
+    outfile = open(filename, 'wb')
+    pickle.dump(idx, outfile)
+    outfile.close()
 
-#print("Index loaded.")
-#print(f"Time: {round(toc-tic, 3)}s")
+print(idx)
 
 ir = IRsystem(corpus, idx)
 
 """### AND queries"""
 
-and_query(ir, "frodo Gandalf")
+fg_and_query = and_query(ir, "frodo Gandalf", noprint=False)
 
-and_query(ir, "yoda luke darth")
+yld_and_query = and_query(ir, "yoda Luke darth", noprint=False)
 
 try:
     and_query(ir, "thig")
 except KeyError:
     print(sys.exc_info()[1])
 
-# 'assert' for the and query result
+frodo_query = and_query(ir, "frodo")
+frodo_set = set(frodo_query)
+
+gandalf_query = and_query(ir, "Gandalf")
+gandalf_set = set(gandalf_query)
+
+fg_and_set = frodo_set.intersection(gandalf_set)
+
+assert set(fg_and_query) == fg_and_set
+
+yoda_query = and_query(ir, "yoda")
+yoda_set = set(yoda_query)
+
+luke_query = and_query(ir, "Luke")
+luke_set = set(luke_query)
+
+darth_query = and_query(ir, "darth")
+darth_set = set(darth_query)
+
+yld_and_set = yoda_set.intersection(luke_set).intersection(darth_set)
+
+assert set(yld_and_query) == yld_and_set
 
 """### AND queries with spelling correction"""
 
-and_query_sc(ir, "yioda lukke darhth")
+mispelled_and_query = and_query_sc(ir, "yioda lukke darhth", noprint=False)
 
-my_and_query = and_query(ir, "yoda luke darth")
-mispelled_and_query = and_query_sc(ir, "yioda lukke darhth")
-
-assert my_and_query == mispelled_and_query
+assert yld_and_query == mispelled_and_query
 
 """### OR queries"""
 
-or_query(ir, "frodo yoda")
+fy_or_query = or_query(ir, "frodo yoda", noprint=False)
 
-frodo_query = and_query(ir, "frodo")
-yoda_query = and_query(ir, "yoda")
-frodo_or_yoda_query = or_query(ir, "frodo yoda")
 # frodo_query.extend(yoda_query)  # then print 'frodo_query' !!!!
-frodo_p_yoda_query = frodo_query + yoda_query
+fy_or_set = set(frodo_query + yoda_query)
 
-assert set(frodo_p_yoda_query) == set(frodo_or_yoda_query)
+assert set(fy_or_query) == fy_or_set
 
-frodo_query = and_query(ir, "frodo")
-yoda_query = and_query(ir, "yoda")
-third_query = and_query(ir, "gandalf")
-my_or_query = set(or_query(ir, "frodo yoda gandalf"))
-all_query = set(frodo_query + yoda_query + third_query)
+fyg_or_query = or_query(ir, "frodo yoda gandalf", noprint=False)
 
-assert all_query == my_or_query
+fyg_or_set = set(frodo_query + yoda_query + gandalf_query)
 
-frodo_query = and_query(ir, "frodo")
-yoda_query = and_query(ir, "yoda")
-third_query = and_query(ir, "love")
-my_or_query = set(or_query(ir, "frodo yoda love"))
-all_query = set(frodo_query + yoda_query + third_query)
+assert set(fyg_or_query) == fyg_or_set
 
-assert all_query == my_or_query
+love_query = and_query(ir, "love")
+fyl_or_query = or_query(ir, "frodo yoda love")
+fyl_or_set = set(frodo_query + yoda_query + love_query)
+
+assert set(fyl_or_query) == fyl_or_set
