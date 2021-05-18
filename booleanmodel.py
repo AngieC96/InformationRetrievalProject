@@ -239,13 +239,14 @@ from typing import List
 
 class InvertedIndex:
 
-    _dictionary: List
+    _dictionary: List   # A collection of terms
     
     def __init__(self):
         self._dictionary = {}  # initially the inverted index dictionary is empty
         
     @classmethod  # instead of having this method associated to a specific instance/object of the class InvertedIndex we write InvertedIndex.from_corpus(). Because you can have only one __init__ method, so you use @classmethod to have multiple constructors. It's like a static method in Java
     def from_corpus(cls, corpus: list):
+        # Here we "cheat" by using python dictionaries
         intermediate_dict = {}   # we cheat a little bit and use a Python dictionary → we should create a big list, sort it and merge everything
         print("Processing the corpus to create the index...")
         for docID, document in enumerate(corpus): # NB: corpus: collection (list) of objects of type MovieDescription
@@ -256,7 +257,8 @@ class InvertedIndex:
                     intermediate_dict[token].merge(term)  # I merge the two posting lists → Term.merge() which calls PostingList.merge()
                 except KeyError:
                     intermediate_dict[token] = term # for when the term is not present in the dict
-            update_progress(docID/len(corpus))  # to see the progressing of our indexing
+            # To observe the progressing of our indexing
+            update_progress(docID/len(corpus))
                 
         idx = cls()  # we call the constructor of the class = InvertedIndex
         idx._dictionary = sorted(intermediate_dict.values())  # list of all the sorted terms
@@ -295,7 +297,7 @@ class MovieDescription:  # container for all the info we have about the movie
       return hash((self.title, self.description))
         
     def __repr__(self):
-        return self.title
+        return self.title  # + "\n" + self.description + "\n"
 
 def read_movie_descriptions():
     filename = 'data/plot_summaries.txt'   # not very portable but done for the sake of simplicity
@@ -315,8 +317,45 @@ def read_movie_descriptions():
                 movie = MovieDescription(names_table[desc[0]], desc[1]) # the first element is the ID, the second the description
                 corpus.append(movie)
             except KeyError:  # in case we don't find the title associated to that ID
+                # We ignore the descriptions for which we cannot find a title
                 pass
         return corpus
+
+"""## Edit distance
+
+By computing the edit distance we can find the set of words that are the closest to a misspelled word. However, computing the edit distance on the entire dictionary can be too expensive. We can use some heuristics to limit the number of words, like looking only at words with the same initial letter (hopefully this has not been misspelled).
+"""
+
+def edit_distance(u, v):
+    """ Computes the edit (or Levenshtein) distance between two words u and v.
+    """
+    nrows = len(u) + 1
+    ncols = len(v) + 1
+    M = [[0] * ncols for i in range(0, nrows)]
+    for i in range(0, nrows):
+        M[i][0] = i
+    for j in range(0, ncols):
+        M[0][j] = j
+    for i in range(1, nrows):
+        for j in range(1, ncols):
+            candidates = [M[i-1][j] + 1, M[i][j-1] + 1]
+            if (u[i-1] == v[j-1]):
+                candidates.append(M[i-1][j-1])
+            else:
+                candidates.append(M[i-1][j-1] + 1)
+            M[i][j] = min(candidates)
+            # To print the distance matrix
+            if print:
+                print(M[i][j], end="\t")
+        print()
+    return M[-1][-1]
+
+def find_nearest(word, dictionary, keep_first=False):
+    if keep_first:
+        dictionary = [w for w in dictionary if w[0] == word[0]]
+    distances = map(lambda x: edit_distance(word, x), dictionary)
+    # [(45, "aaa"), ...] 
+    return min(zip(distances, dictionary))[1]
 
 """## IR System
 
@@ -338,16 +377,56 @@ class IRsystem:
         return cls(corpus, index)  # retrun the constructor when we have yet the index
     
     def answer_and_query(self, words: List[str]):  # We have a list of words like ['cat', 'batman']
+        """ AND-query
+        """
         norm_words = map(normalize, words)  # Normalize all the words. IMPORTANT!!! If the user uses upper-case we will not have ANY match! We have to perform the same normalization of the docs in the corpus on the query!
         postings = map(lambda w: self._index[w], norm_words) # get the posting list for each word → list of posting lists
         plist = reduce(lambda x, y: x.intersection(y), postings)  # apply the function to the two items of the list, then apply it to the result with the third, then the result with the fourt term and so on until the end of the list
         return plist.get_from_corpus(self._corpus) # retrun the documents
+
+    def answer_and_query_sc(self, words: List[str]):
+        """ AND-query with spelling correction
+        """
+        norm_words = map(normalize, words)
+        postings = []
+        for w in norm_words:
+            try:
+                res = self._index[w]
+            except KeyError:
+                dictionary = [t.term for t in self._index._dictionary]
+                sub = find_nearest(w, dictionary, keep_first=True)
+                print("{} not found. Did you mean {}?".format(w, sub))
+                res = self._index[sub]
+            postings.append(res)
+        plist = reduce(lambda x, y: x.intersection(y), postings)
+        return plist.get_from_corpus(self._corpus)
     
     def answer_or_query(self, words: List[str]):
+        """ OR-query
+        """
         norm_words = map(normalize, words)
         postings = map(lambda w: self._index[w], norm_words)
         plist = reduce(lambda x, y: x.union(y), postings)
         return plist.get_from_corpus(self._corpus)
+
+    def answer_or_query_sc(self, words: List[str]):
+        """ OR-query with spelling correction
+        """
+        norm_words = map(normalize, words)
+        postings = []
+        for w in norm_words:
+            try:
+                res = self._index[w]
+            except KeyError:
+                dictionary = [t.term for t in self._index._dictionary]
+                sub = find_nearest(w, dictionary, keep_first=True)
+                print("{} not found. Did you mean {}?".format(w, sub))
+                res = self._index[sub]
+            postings.append(res)
+        plist = reduce(lambda x, y: x.union(y), postings)
+        return plist.get_from_corpus(self._corpus)
+
+"""### Queries"""
 
 def and_query(ir: IRsystem, text: str, noprint=True):
     words = text.split()
@@ -365,6 +444,24 @@ def or_query(ir: IRsystem, text: str, noprint=True):
             print(movie)
     return answer
 
+"""## Queries with spellng correction"""
+
+def and_query_sc(ir: IRsystem, text: str, noprint=True):
+    words = text.split()
+    answer = ir.answer_and_query_sc(words)
+    if not noprint:
+        for movie in answer:
+            print(movie)
+    return answer
+
+def or_query(ir: IRsystem, text: str, noprint=True):
+    words = text.split()
+    answer = ir.answer_or_query_sc(words)
+    if not noprint:
+        for movie in answer:
+            print(movie)
+    return answer
+
 """## Test queries
 
 ### Initialization
@@ -372,10 +469,10 @@ def or_query(ir: IRsystem, text: str, noprint=True):
 
 corpus = read_movie_descriptions()
 
-tic = time.time()
-idx = InvertedIndex.from_corpus(corpus)
-toc = time.time()
-print(f"\n\nTime: {round(toc-tic, 3)}s")
+#tic = time.time()
+#idx = InvertedIndex.from_corpus(corpus)
+#toc = time.time()
+#print(f"\n\nTime: {round(toc-tic, 3)}s")
 
 print(idx)
 
@@ -387,21 +484,19 @@ We will save the index using `Pickle`. `Pickle` is used for serializing and de-s
 filename = "index"
 
 # save the index
-outfile = open(filename, 'wb')
-pickle.dump(idx, outfile)
-outfile.close()
+#outfile = open(filename, 'wb')
+#pickle.dump(idx, outfile)
+#outfile.close()
 
 # load the index
-tic = time.time()
-infile = open(filename, 'rb')
-idx2 = pickle.load(infile)
-infile.close()
-toc = time.time()
+#tic = time.time()
+#infile = open(filename, 'rb')
+#idx = pickle.load(infile)
+#infile.close()
+#toc = time.time()
 
-print("Index loaded.")
-print(f"Time: {round(toc-tic, 3)}s")
-
-print(idx2)
+#print("Index loaded.")
+#print(f"Time: {round(toc-tic, 3)}s")
 
 ir = IRsystem(corpus, idx)
 
@@ -417,6 +512,15 @@ except KeyError:
     print(sys.exc_info()[1])
 
 # 'assert' for the and query result
+
+"""### AND queries with spelling correction"""
+
+and_query_sc(ir, "yioda lukke darhth")
+
+my_and_query = and_query(ir, "yoda luke darth")
+mispelled_and_query = and_query_sc(ir, "yioda lukke darhth")
+
+assert my_and_query == mispelled_and_query
 
 """### OR queries"""
 
