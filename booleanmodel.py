@@ -15,6 +15,7 @@ import re      # for regular expressions
 import pickle  # to save the index
 import time
 import os.path
+import copy
 
 """## Postings
 
@@ -75,7 +76,7 @@ class PostingList:
         return plist
     
     @classmethod
-    def from_posting_list(cls, postingList: 'PostingList'):
+    def from_posting_list(cls, postingList):
         """ A posting list can also be constructed by using another posting list.
         """
         plist = cls()
@@ -91,7 +92,7 @@ class PostingList:
         discarded.
         """
         i = 0
-        last = self._postings[-1]   # the self eleemnt of the current postinglist
+        last = self._postings[-1]   # the self element of the current postinglist
         while (i < len(other._postings) and last == other._postings[i]):  # we can have the same docID multiple times and when e merge them we don't want them multiple times
             i += 1
         self._postings += other._postings[i:]
@@ -137,9 +138,20 @@ class PostingList:
         for k in range(j, len(other._postings)):
             union.append(other._postings[k])
         return PostingList.from_posting_list(union)
+
+    def difference(self, other: 'PostingList'):
+      difference = []
+
+      return PostingList.from_posting_list(difference)
     
     def get_from_corpus(self, corpus):   # used when we have a posting list that is the result of a query, but I don't want the docID, I want the docs!
         return list(map(lambda x: x.get_from_corpus(corpus), self._postings))  # I return a list of documents
+    
+    def __getitem__(self, key):
+        return self._postings[key]
+    
+    def __len__(self):
+        return len(self._postings)
     
     def __repr__(self):
         return ", ".join(map(str, self._postings))
@@ -240,10 +252,12 @@ from typing import List
 
 class InvertedIndex:
 
-    _dictionary: List   # A collection of terms
+    _dictionary: List
+    complete_plist: PostingList
     
     def __init__(self):
-        self._dictionary = {}  # initially the inverted index dictionary is empty
+        self._dictionary = []
+        self.complete_plist = PostingList() # PostingList of all the documents
         
     @classmethod  # instead of having this method associated to a specific instance/object of the class InvertedIndex we write InvertedIndex.from_corpus(). Because you can have only one __init__ method, so you use @classmethod to have multiple constructors. It's like a static method in Java
     def from_corpus(cls, corpus: list):
@@ -251,6 +265,10 @@ class InvertedIndex:
         intermediate_dict = {}   # we cheat a little bit and use a Python dictionary → we should create a big list, sort it and merge everything
         print("Processing the corpus to create the index...")
         for docID, document in enumerate(corpus): # NB: corpus: collection (list) of objects of type MovieDescription
+            if docID == 0:
+                plist = PostingList.from_docID(docID)
+            else:
+                plist.merge(PostingList.from_docID(docID)) # I update the PostingList of all the docs
             tokens = tokenize(document) # document is a MovieDescription object
             for token in tokens:
                 term = Term(token, docID)
@@ -260,9 +278,10 @@ class InvertedIndex:
                     intermediate_dict[token] = term # for when the term is not present in the dict
             # To observe the progressing of our indexing
             update_progress(docID/len(corpus))
-                
+        
         idx = cls()  # we call the constructor of the class = InvertedIndex
         idx._dictionary = sorted(intermediate_dict.values())  # list of all the sorted terms
+        idx.complete_plist = plist
         return idx
     
     def __getitem__(self, key): # indexing the inverted index using as keys the terms
@@ -429,7 +448,14 @@ class IRsystem:
             postings = map(lambda w: self._index[w], norm_words)
         else:
             postings = self.spelling_correction(norm_words)
-        #plist = ????? #reduce(lambda x, y: x.union(y), postings)
+        words_plist = reduce(lambda x, y: x.union(y), postings)
+        print(len(words_plist), type(words_plist._postings))
+        plist = copy.deepcopy(self._index.complete_plist)
+        print(len(plist))
+        for i in words_plist:
+            if i in plist:
+                plist._postings.remove(i)
+        print(len(plist))
         return self.get_from_corpus(plist)
 
     def answer_query(self, op: str, words = None, word = None, posting = None):
@@ -441,7 +467,7 @@ class IRsystem:
             elif op == 'OR':
                 plist = reduce(lambda x, y: x.union(y), postings)
             elif op == 'NOT':
-                pass # !!!!!!!!!!!!!!!!!!!!
+                pass # plist.remove() !!!!!!!!!!!!!!!!!!!!
         else:
             norm_word = normalize(word)
             word_posting = self._index[norm_word]
@@ -450,8 +476,23 @@ class IRsystem:
             elif op == 'OR':
                 plist = word_posting.union(posting)
             elif op == 'NOT':
-                pass # !!!!!!!!!!!!!!!!!!!!
+                pass #postings.remove(word) # !!!!!!!!!!!!!!!!!!!!
         return plist
+
+plist = PostingList.from_docID(0)
+plist.merge(PostingList.from_docID(7))
+plist.merge(PostingList.from_docID(10))
+plist2 = PostingList.from_docID(7)
+plist2.merge(PostingList.from_docID(8))
+
+print(f"plist: {plist}")
+print(f"plist2: {plist2}")
+
+for i in plist2._postings:
+  if i in plist:
+    plist._postings.remove(i)
+
+print(f"plist: {plist}")
 
 """### Queries"""
 
@@ -466,6 +507,14 @@ def and_query(ir: IRsystem, text: str, noprint=True):
 def or_query(ir: IRsystem, text: str, noprint=True):
     words = text.split()
     answer = ir.answer_or_query(words)
+    if not noprint:
+        for movie in answer:
+            print(movie)
+    return answer
+
+def not_query(ir: IRsystem, text: str, noprint=True):
+    words = text.split()
+    answer = ir.answer_not_query(words)
     if not noprint:
         for movie in answer:
             print(movie)
@@ -494,7 +543,7 @@ def query(ir: IRsystem, text: str, noprint=True):
             else:
                 partial_answer = ir.answer_query(op = w, word = words[i+1], posting = partial_answer)
         elif w == 'NOT':
-            pass
+            pass # !!!!!!!!!!!!!!!!!!!!
     answer = ir.get_from_corpus(partial_answer)
     if not noprint:
         for movie in answer:
@@ -525,6 +574,7 @@ def or_query_sc(ir: IRsystem, text: str, noprint=True):
 """
 
 corpus = read_movie_descriptions()
+len(corpus)
 
 """#### Saving / loading the index
 
@@ -559,12 +609,13 @@ else:
 
 print(idx)
 
-idx._dictionary[3907] # term "a"
+i=3907  # the term "a"
+print(type(idx._dictionary[i]))
+print(idx._dictionary[i])
+print(idx._dictionary[i].term)
+print(f"len: {len(idx._dictionary[i].posting_list)}")
 
 ir = IRsystem(corpus, idx)
-
-print(type(idx._dictionary[0].posting_list._postings[0]))
-print(idx._dictionary[0].posting_list._postings[0])
 
 """### AND queries"""
 
@@ -635,13 +686,155 @@ assert fyg_or_query == mispelled_or_query
 
 """### NOT queries"""
 
-#l_not_query = not_query(ir, "love", noprint=False)
+a_not_query = not_query(ir, "a", noprint=False)
+
+a = 3907  # position of the term "a" in the index
+documents = list(range(len(corpus)))
+print(type(documents[0]))
+for i in idx._dictionary[a].posting_list._postings:
+    documents.remove(i._docID)
+print(len(documents))
+print(documents)
+
+documents = copy.deepcopy(corpus)
+print(len(documents))
+docs_delete = []
+for i in idx._dictionary[a].posting_list._postings:
+    docs_delete.append(documents[i._docID])
+
+for i in docs_delete: # otherwise if you remove elements while you scan they shift and you remove the wrong ones!
+    documents.remove(i)
+
+#documents = list(set(documents))
+print(f"len(documents): {len(documents)}, len(a_not_query): {len(a_not_query)}")
+print(f"len(set(documents)): {len(set(documents))}, len(set(a_not_query)): {len(set(a_not_query))}")
+
+assert len(a_not_query) == len(corpus) - len(idx._dictionary[a].posting_list)
+# assert set(a_not_query) == set(documents) # Don't know why, but it fails
+assert sorted(list(set(a_not_query))) == sorted(list(set(documents)))
+
+jj = [element for element in corpus if corpus.count(element) > 1]
+print(jj)
+
+print("corpus")
+wv = []
+rua = []
+for i, c in enumerate(corpus):
+    if c.title == "The Warrens of Virginia":
+        wv.append(i)
+        print("Found film 1")
+    if c.title == "Robbery Under Arms":
+        rua.append(i)
+        print("Found film 2")
+print(wv, rua)
+
+#contains_duplicates = any(documents.count(element) > 1 for element in documents)
+j = [element for element in documents if documents.count(element) > 1]
+print(j)
+
+wv = []
+rua = []
+for i, d in enumerate(documents):
+    if d.title == "The Warrens of Virginia":
+        wv.append(i)
+        print("Found film 1")
+    if d.title == "Robbery Under Arms":
+        rua.append(i)
+        print("Found film 2")
+print(wv, rua)
+
+import collections
+contains_duplicates = [item for item, count in collections.Counter(documents).items() if count > 1]
+print(contains_duplicates)
+
+seen = set()
+duplicate = []
+uniq = []
+for x in documents:
+    if x not in seen:
+        uniq.append(x)
+        seen.add(x)
+    else:
+        duplicate.append(x)
+    if x.title == "The Warrens of Virginia":
+        print("Found film 1")
+    if x.title == "Robbery Under Arms":
+        print("Found film 2")
+print(duplicate)
+
+collections.Counter(a_not_query) == collections.Counter(documents)
+
+j_query = [element for element in a_not_query if a_not_query.count(element) > 1]
+print(j_query)
+
+contains_duplicates_query = [item for item, count in collections.Counter(a_not_query).items() if count > 1]
+print(contains_duplicates_query)
+
+seen_query = set()
+uniq_query = [x for x in documents if x not in seen_query and not seen_query.add(x)] 
+print(uniq)
+
+print(len(a_not_query), len(documents))
+print(f"a_not_query == documents? {a_not_query == documents}")
+
+set_query = set(a_not_query) 
+set_docs = set(documents)
+print(len(set_query), len(set_docs))
+print(f"set_query == set_docs? {set_query == set_docs}")
+
+u = set_query.union(set_docs)
+print("u:", len(u), u)
+i = set_query.intersection(set_docs)
+print("i:", len(i), i)
+
+nn = u.difference(i)
+print("nn:", len(nn), nn)
+
+d = set_docs.difference(set_query)
+print("d:", len(d), d)
+e = set_query.difference(set_docs)
+print("e:", len(e), e)
+print("d == e?", d == e)
+
+e2 = sorted(list(e))
+d2 = sorted(list(d))
+print("sort(d) == sort(e)?", d2 == e2)
+
+g = d.symmetric_difference(e)
+print("g:", len(g), g)
+print("nn == g?", nn == g)
+p = sorted(list(g))
+print("p=sort(g):", len(p), p)
+print("sort(nn) == p?", sorted(list(nn)) == p)
+
+f = set_query.symmetric_difference(set_docs)
+print("f:", len(f), f)
+o = sorted(list(f))
+print("o:", len(o), o)
+print("o[0] == o[1]?", o[0] == o[1])
+print("set(o):", len(set(o)), set(o))
+t = corpus.index(o[0])
+v = corpus.index(o[1])
+print(t, corpus[t], v, corpus[v])
+print(corpus[t] == corpus[v])
+
+print(set(f))
+
+print("p == o?", p == o)
+
+print(corpus[21].title)
+print(corpus[21].description)
+print()
+print(corpus[43].title)
+print(corpus[43].description)
+
+lm_not_query = not_query(ir, "love mother", noprint=False)
 
 corpus_set = set(corpus)
 love_set = set(love_query)
-#l_not_set = corpus_set.intersect(love_set)
+l_not_set = corpus_set.intersection(love_set)
 
-#assert set(l_not_query) == l_not_set
+assert set(lm_not_query) == lm_not_set
 
 """### Compex queries"""
 
