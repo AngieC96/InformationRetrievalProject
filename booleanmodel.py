@@ -441,7 +441,7 @@ class IRsystem:
         return self.get_from_corpus(plist)
 
     def answer_not_query(self, words: List[str], spellingCorrection = False):
-        """ NOT-query
+        """ NOT-query (if `words` is longer than 1, the words are connected using an AND and then the NOT is performed)
         """
         norm_words = map(normalize, words)
         if not spellingCorrection:
@@ -455,25 +455,32 @@ class IRsystem:
                 plist._postings.remove(i)
         return self.get_from_corpus(plist)
 
-    def answer_query(self, op: str, words = None, word = None, posting = None):
+    def answer_query(self, op: str, words = None, word = None, postings = None):
         if words:
             norm_words = map(normalize, words)
-            postings = map(lambda w: self._index[w], norm_words)
+            words_postings = map(lambda w: self._index[w], norm_words)
             if op == 'AND':
-                plist = reduce(lambda x, y: x.intersection(y), postings)
+                plist = reduce(lambda x, y: x.intersection(y), words_postings)
             elif op == 'OR':
-                plist = reduce(lambda x, y: x.union(y), postings)
+                plist = reduce(lambda x, y: x.union(y), words_postings)
             elif op == 'NOT':
-                pass # plist.remove() !!!!!!!!!!!!!!!!!!!!
+                words_postings = list(words_postings)
+                for i in words_postings[1]:
+                    if i in words_postings[0]:
+                        words_postings[0]._postings.remove(i)
+                return words_postings[0]
         else:
             norm_word = normalize(word)
-            word_posting = self._index[norm_word]
+            word_postings = self._index[norm_word]
             if op == 'AND':
-                plist = word_posting.intersection(posting)
+                plist = postings.intersection(word_postings)
             elif op == 'OR':
-                plist = word_posting.union(posting)
+                plist = postings.union(word_postings)
             elif op == 'NOT':
-                pass #postings.remove(word) # !!!!!!!!!!!!!!!!!!!!
+                for i in word_postings:
+                    if i in postings:
+                        postings._postings.remove(i)
+                return postings
         return plist
 
 """### Queries"""
@@ -509,28 +516,69 @@ def query(ir: IRsystem, text: str, noprint=True):
     """
     text.replace('(', '( ', text.count('(')).replace(')', ' )', text.count(')')) # add a space after '(' and before ')' so to split them into separate tokens
     words = text.split()
+    if len(words) == 1:
+        print("You cannot use one single word! Use at least two words connected with a logical operator.")
+        return None
     for i, w in enumerate(words):
         if w == "(":
             pass
-        elif w == 'AND':
+        elif w in ['AND', 'OR', 'NOT']:
             if i == 1:
-                print(f"i = {i}, words_ {[words[i-1], words[i+1]]}")
                 partial_answer = ir.answer_query(op = w, words = [words[i-1], words[i+1]])
             else:
-                partial_answer = ir.answer_query(op = w, word = words[i+1], posting = partial_answer)
-        elif w == 'OR':
-            if i == 1:
-                print(f"i = {i}, words_ {[words[i-1], words[i+1]]}")
-                partial_answer = ir.answer_query(op = w, words = [words[i-1], words[i+1]])
-            else:
-                partial_answer = ir.answer_query(op = w, word = words[i+1], posting = partial_answer)
-        elif w == 'NOT':
-            pass # !!!!!!!!!!!!!!!!!!!!
+                partial_answer = ir.answer_query(op = w, word = words[i+1], postings = partial_answer)
     answer = ir.get_from_corpus(partial_answer)
     if not noprint:
         for movie in answer:
             print(movie)
     return answer
+
+text = "OR (yoda AND Blue) AND"
+for w in text:
+  w.replace('(', '( ').replace(')', ' )') # adds a space after '(' and before ')' so to split them into separate tokens
+print(text)
+words = text.split()
+words
+
+import re
+print(re.sub(r"\((\S)", r'( \1', "(some text)"))      # => (some text)
+print(re.sub(r"\((\S)", r'( \1', "Text(some text)"))  # => Text (some text)
+print(re.sub(r"\((?<!\s)", r'( ', "(some text)"))     # =>  (some text)
+print(re.sub(r"\((\w)", r'( \1', "(some text)"))     # =>  (some text)
+
+text = "Text (!some text) ciao"
+print(text)
+text = re.sub(r"\((\S)", r'( \1', text)
+text = re.sub(r"(\S)\)", r'\1 )', text)
+print(text)
+
+def query_a(text: str, noprint=True):
+    """ This query can answer to any type of query, also complex ones. Use 'AND', 'OR' and 'NOT'
+    and parenthesis to specify how to combine the words in the query.
+    E.g. text = "(yoda AND darth) OR Gandalf NOT love"
+    """
+    text.replace('(', '( ').replace(')', ' )') # add a space after '(' and before ')' so to split them into separate tokens
+    words = text.split()
+    if len(words) == 1:
+        print("You cannot use one single word! Use at least two words connected with a logical operator.")
+        return None
+    for i, w in enumerate(words):
+        if w == "(":
+            print("(")
+            while w != ")":
+                print("Continue")
+                continue
+            print(")")
+        elif w in ['AND', 'OR', 'NOT']:
+            if i == 1:
+                print(i, w)
+            else:
+                print(i, w)
+    return
+
+
+test = "Ciao AND bella OR (come AND stai OR boh) AND ciao"
+query_a(test)
 
 """### Queries with spelling correction"""
 
@@ -637,7 +685,6 @@ assert yld_and_query == mispelled_and_query
 
 fy_or_query = or_query(ir, "frodo yoda", noprint=False)
 
-# frodo_query.extend(yoda_query)  # then print 'frodo_query' !!!!
 fy_or_set = set(frodo_query + yoda_query)
 
 assert set(fy_or_query) == fy_or_set
@@ -690,6 +737,10 @@ assert set(yg_not_query) == yg_not_set
 
 """### Compex queries"""
 
+yoda_complex_query = query(ir, "yoda", noprint=False)
+
+yoda_par_complex_query = query(ir, "(yoda)", noprint=False)
+
 yAdOg_query = query(ir, "yoda AND darth OR Gandalf", noprint=False)
 
 yd_and_set = yoda_set.intersection(darth_set)
@@ -711,10 +762,17 @@ yOdOgAl_set = ydg_and_set.intersection(love_set)
 
 assert set(yOdOgAl_query) == yOdOgAl_set
 
-#yAdOgNl_query = query(ir, "yoda AND darth OR Gandalf NOT love", noprint=False)
+yAdOgNl_query = query(ir, "yoda AND darth OR Gandalf NOT love", noprint=False)
 
 yAdOgNl_set = yAdOg_set.difference(love_set)
 
-#assert set(yAdOgNl_query) == yAdOgNl_set
+assert set(yAdOgNl_query) == yAdOgNl_set
+
+yNdOg_query = query(ir, "yoda NOT darth OR Gandalf", noprint=False)
+
+yNd_set = yoda_set.difference(darth_set)
+yNdOg_set = yNd_set.union(gandalf_set)
+
+assert set(yNdOg_query) == yNdOg_set
 
 #query(ir, "(yoda AND darth) OR Gandalf NOT love", noprint=False)
