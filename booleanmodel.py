@@ -686,153 +686,82 @@ assert fyg_or_query == mispelled_or_query
 
 """### NOT queries"""
 
-a_not_query = not_query(ir, "a", noprint=False)
+a_not_query = not_query(ir, "a", noprint=True)
 
 a = 3907  # position of the term "a" in the index
-documents = list(range(len(corpus)))
-print(type(documents[0]))
-for i in idx._dictionary[a].posting_list._postings:
-    documents.remove(i._docID)
-print(len(documents))
-print(documents)
-
-documents = copy.deepcopy(corpus)
-print(len(documents))
+a_not_documents = copy.deepcopy(corpus)
 docs_delete = []
 for i in idx._dictionary[a].posting_list._postings:
-    docs_delete.append(documents[i._docID])
+    docs_delete.append(a_not_documents[i._docID])
 
 for i in docs_delete: # otherwise if you remove elements while you scan they shift and you remove the wrong ones!
-    documents.remove(i)
+    a_not_documents.remove(i)
 
 #documents = list(set(documents))
-print(f"len(documents): {len(documents)}, len(a_not_query): {len(a_not_query)}")
-print(f"len(set(documents)): {len(set(documents))}, len(set(a_not_query)): {len(set(a_not_query))}")
+print(f"len(a_not_documents): {len(a_not_documents)}, len(a_not_query): {len(a_not_query)}")
+print(f"len(set(a_not_documents)): {len(set(a_not_documents))}, len(set(a_not_query)): {len(set(a_not_query))}")
 
 assert len(a_not_query) == len(corpus) - len(idx._dictionary[a].posting_list)
-# assert set(a_not_query) == set(documents) # Don't know why, but it fails
-assert sorted(list(set(a_not_query))) == sorted(list(set(documents)))
-
-jj = [element for element in corpus if corpus.count(element) > 1]
-print(jj)
-
-print("corpus")
-wv = []
-rua = []
-for i, c in enumerate(corpus):
-    if c.title == "The Warrens of Virginia":
-        wv.append(i)
-        print("Found film 1")
-    if c.title == "Robbery Under Arms":
-        rua.append(i)
-        print("Found film 2")
-print(wv, rua)
-
-#contains_duplicates = any(documents.count(element) > 1 for element in documents)
-j = [element for element in documents if documents.count(element) > 1]
-print(j)
-
-wv = []
-rua = []
-for i, d in enumerate(documents):
-    if d.title == "The Warrens of Virginia":
-        wv.append(i)
-        print("Found film 1")
-    if d.title == "Robbery Under Arms":
-        rua.append(i)
-        print("Found film 2")
-print(wv, rua)
-
-import collections
-contains_duplicates = [item for item, count in collections.Counter(documents).items() if count > 1]
-print(contains_duplicates)
-
-seen = set()
-duplicate = []
-uniq = []
-for x in documents:
-    if x not in seen:
-        uniq.append(x)
-        seen.add(x)
-    else:
-        duplicate.append(x)
-    if x.title == "The Warrens of Virginia":
-        print("Found film 1")
-    if x.title == "Robbery Under Arms":
-        print("Found film 2")
-print(duplicate)
-
-collections.Counter(a_not_query) == collections.Counter(documents)
-
-j_query = [element for element in a_not_query if a_not_query.count(element) > 1]
-print(j_query)
-
-contains_duplicates_query = [item for item, count in collections.Counter(a_not_query).items() if count > 1]
-print(contains_duplicates_query)
-
-seen_query = set()
-uniq_query = [x for x in documents if x not in seen_query and not seen_query.add(x)] 
-print(uniq)
-
-print(len(a_not_query), len(documents))
-print(f"a_not_query == documents? {a_not_query == documents}")
-
-set_query = set(a_not_query) 
-set_docs = set(documents)
-print(len(set_query), len(set_docs))
-print(f"set_query == set_docs? {set_query == set_docs}")
-
-u = set_query.union(set_docs)
-print("u:", len(u), u)
-i = set_query.intersection(set_docs)
-print("i:", len(i), i)
-
-nn = u.difference(i)
-print("nn:", len(nn), nn)
-
-d = set_docs.difference(set_query)
-print("d:", len(d), d)
-e = set_query.difference(set_docs)
-print("e:", len(e), e)
-print("d == e?", d == e)
-
-e2 = sorted(list(e))
-d2 = sorted(list(d))
-print("sort(d) == sort(e)?", d2 == e2)
-
-g = d.symmetric_difference(e)
-print("g:", len(g), g)
-print("nn == g?", nn == g)
-p = sorted(list(g))
-print("p=sort(g):", len(p), p)
-print("sort(nn) == p?", sorted(list(nn)) == p)
-
-f = set_query.symmetric_difference(set_docs)
-print("f:", len(f), f)
-o = sorted(list(f))
-print("o:", len(o), o)
-print("o[0] == o[1]?", o[0] == o[1])
-print("set(o):", len(set(o)), set(o))
-t = corpus.index(o[0])
-v = corpus.index(o[1])
-print(t, corpus[t], v, corpus[v])
-print(corpus[t] == corpus[v])
-
-print(set(f))
-
-print("p == o?", p == o)
-
-print(corpus[21].title)
-print(corpus[21].description)
-print()
-print(corpus[43].title)
-print(corpus[43].description)
-
-lm_not_query = not_query(ir, "love mother", noprint=False)
+assert len(a_not_query) == len(a_not_documents)
+# assert set(a_not_query) == set(a_not_documents) # Don't know why, but it fails
+assert sorted(list(set(a_not_query))) == sorted(list(set(a_not_documents)))
 
 corpus_set = set(corpus)
+a_query = and_query(ir, "a", noprint=True)
+a_set = set(a_query)
+a_not_set = corpus_set.difference(a_set)
+
+assert set(a_not_query) == a_not_set
+
+lm_not_query = not_query(ir, "love mother", noprint=True)
+
+love = 100979  # position of the term "love" in the index
+mother = 113851  # position of the term "mother" in the index
+lm_not_documents = copy.deepcopy(corpus)
+docs_delete = []
+for i in idx._dictionary[love].posting_list._postings:
+    docs_delete.append(lm_not_documents[i._docID])
+for i in idx._dictionary[mother].posting_list._postings:
+    docs_delete.append(lm_not_documents[i._docID])
+
+for i in docs_delete: # otherwise if you remove elements while you scan they shift and you remove the wrong ones!
+    if i in lm_not_documents:
+        lm_not_documents.remove(i)
+
+#documents = list(set(documents))
+print(f"len(lm_not_documents): {len(lm_not_documents)}, len(lm_not_query): {len(lm_not_query)}")
+print(f"len(set(lm_not_documents)): {len(set(lm_not_documents))}, len(set(lm_not_query)): {len(set(lm_not_query))}")
+
+print(len(lm_not_query), len(corpus) - len(idx._dictionary[love].posting_list) - len(idx._dictionary[mother].posting_list))
+
+lm_not_documents = copy.deepcopy(corpus)
+docs_delete = []
+lm_postings = idx._dictionary[love].posting_list.union(idx._dictionary[mother].posting_list)
+
+for i in lm_postings._postings:
+    docs_delete.append(lm_not_documents[i._docID])
+
+for i in docs_delete: # otherwise if you remove elements while you scan they shift and you remove the wrong ones!
+    lm_not_documents.remove(i)
+
+#documents = list(set(documents))
+print(f"len(lm_not_documents): {len(lm_not_documents)}, len(lm_not_query): {len(lm_not_query)}")
+print(f"lm_not_documents == lm_not_query: {lm_not_documents == lm_not_query}")
+print(f"len(set(lm_not_documents)): {len(set(lm_not_documents))}, len(set(lm_not_query)): {len(set(lm_not_query))}")
+
+print(f"len(lm_postings): {len(lm_postings)}")
+print(len(lm_not_query), len(corpus) - len(lm_postings))
+
+#assert len(lm_not_query) == len(corpus) - len(lm_postings)
+#assert len(lm_not_query) == len(lm_not_documents)
+# assert set(lm_not_query) == set(lm_not_documents) # Don't know why, but it fails
+#assert sorted(list(set(lm_not_query))) == sorted(list(set(lm_not_documents)))
+
 love_set = set(love_query)
-l_not_set = corpus_set.intersection(love_set)
+mother_query = and_query(ir, "mother")
+mother_set = set(mother_query)
+lm_set = love_set.union(mother_set)
+lm_not_set = corpus_set.difference(lm_set)
 
 assert set(lm_not_query) == lm_not_set
 
