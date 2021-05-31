@@ -565,7 +565,6 @@ def query_a(text: str, noprint=True):
                 print(w)
     return
 
-
 test = "Ciao AND bella OR (come AND stai OR boh) AND ciao"
 print(test)
 query_a(test)
@@ -573,6 +572,12 @@ query_a(test)
 print()
 
 test = "Ciao AND bella OR (come AND (stai OR boh)) AND ciao"
+print(test)
+query_a(test)
+
+print()
+
+test = "Ciao AND bella OR (come AND (stai OR boh) NOT miao) AND ciao"
 print(test)
 query_a(test)
 
