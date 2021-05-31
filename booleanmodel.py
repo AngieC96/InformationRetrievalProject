@@ -536,71 +536,6 @@ def query(ir: IRsystem, text: str, noprint=True):
             print(movie)
     return answer
 
-text = "OR (yoda AND Blue) AND"
-for w in text:
-  w.replace('(', '( ').replace(')', ' )') # adds a space after '(' and before ')' so to split them into separate tokens
-print(text)
-words = text.split()
-words
-
-import re
-print(re.sub(r"\((\S)", r'( \1', "(some text)"))      # => (some text)
-print(re.sub(r"\((\S)", r'( \1', "Text(some text)"))  # => Text (some text)
-print(re.sub(r"\((?<!\s)", r'( ', "(some text)"))     # =>  (some text)
-print(re.sub(r"\((\w)", r'( \1', "(some text)"))     # =>  (some text)
-print(re.sub(r"\((\w)", r'( \1', "( some text)"))     # =>  (some text)
-
-text = "Text (!some text) ciao"
-print(text)
-text = re.sub(r"\((\S)", r'( \1', text)
-text = re.sub(r"(\S)\)", r'\1 )', text)
-print(text)
-
-print()
-text = "Text (!some text) ciao (mao)"
-print(text)
-text = re.sub(r"\((\S)", r'( \1', text)
-text = re.sub(r"(\S)\)", r'\1 )', text)
-print(text)
-
-print()
-text = "Text (ciao (!some text) mao) ciao"
-print(text)
-text = re.sub(r"\((\S)", r'( \1', text)
-text = re.sub(r"(\S)\)", r'\1 )', text)
-print(text)
-
-print()
-text = "Text ((!some text)) ciao"
-print(text)
-text = re.sub(r"\((\S)", r'( \1', text)
-text = re.sub(r"(\S)\)", r'\1 )', text)
-print(text)
-text = re.sub(r"\((\S)", r'( \1', text)
-text = re.sub(r"(\S)\)", r'\1 )', text)
-print(text)
-
-re.sub(r"\(", r'( ', "(((")
-
-text = "Text ((!some text)) ciao"
-print(text)
-text = re.sub(r"\((\S)", r'( \1', text)
-text = re.sub(r"(\S)\)", r'\1 )', text)
-text = re.sub(r"\(", r'( ', text)
-print(text)
-
-words = text.split()
-words
-
-text = "Text ((!some text)) ciao"
-print(text)
-text = re.sub(r"\(", r'( ', text)
-words = text.split()
-print(words)
-
-print(words[1] == "(")
-print(words[2] == "(")
-
 def query_a(text: str, noprint=True):
     """ This query can answer to any type of query, also complex ones. Use 'AND', 'OR' and 'NOT'
     and parenthesis to specify how to combine the words in the query.
@@ -613,29 +548,43 @@ def query_a(text: str, noprint=True):
     if len(words) == 1:
         print("You cannot use one single word! Use at least two words connected with a logical operator.")
         return None
-    for i, w in enumerate(words):
-        if w == "(":
+    words_iter = iter(enumerate(words))
+    for w in words_iter:
+        #print(w)
+        if w[1] == "(":
             print("(")
-            #while w != ")":
-                #print("Continue")
-
-                #continue
+            while (w[1] != ")"):
+                if w[1] in ['AND', 'OR', 'NOT']:
+                    print(w)
+                w = next(words_iter)
             print(")")
-        elif w in ['AND', 'OR', 'NOT']:
+        elif w[1] in ['AND', 'OR', 'NOT']:
             if i == 1:
-                print(i, w)
+                print(w)
             else:
-                print(i, w)
+                print(w)
     return
 
 
 test = "Ciao AND bella OR (come AND stai OR boh) AND ciao"
+print(test)
 query_a(test)
 
 print()
 
 test = "Ciao AND bella OR (come AND (stai OR boh)) AND ciao"
+print(test)
 query_a(test)
+
+words = ['Ciao', 'AND', 'bella', 'OR', '(', 'come', 'AND', 'stai', 'OR', 'boh', ')', 'AND', 'ciao']
+words_iter = iter(enumerate(words))
+i = next(words_iter)
+print(i)
+i = next(words_iter)
+print(i)
+
+for w in words_iter:
+  print(w)
 
 """### Queries with spelling correction"""
 
