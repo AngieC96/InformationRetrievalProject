@@ -476,21 +476,6 @@ class IRsystem:
                 pass #postings.remove(word) # !!!!!!!!!!!!!!!!!!!!
         return plist
 
-plist = PostingList.from_docID(0)
-plist.merge(PostingList.from_docID(7))
-plist.merge(PostingList.from_docID(10))
-plist2 = PostingList.from_docID(7)
-plist2.merge(PostingList.from_docID(8))
-
-print(f"plist: {plist}")
-print(f"plist2: {plist2}")
-
-for i in plist2._postings:
-  if i in plist:
-    plist._postings.remove(i)
-
-print(f"plist: {plist}")
-
 """### Queries"""
 
 def and_query(ir: IRsystem, text: str, noprint=True):
@@ -605,12 +590,6 @@ else:
     outfile.close()
 
 print(idx)
-
-i=3907  # the term "a"
-print(type(idx._dictionary[i]))
-print(idx._dictionary[i])
-print(idx._dictionary[i].term)
-print(f"len: {len(idx._dictionary[i].posting_list)}")
 
 ir = IRsystem(corpus, idx)
 
