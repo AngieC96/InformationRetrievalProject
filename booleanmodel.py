@@ -514,7 +514,10 @@ def query(ir: IRsystem, text: str, noprint=True):
     and parenthesis to specify how to combine the words in the query.
     E.g. text = "(yoda AND darth) OR Gandalf NOT love"
     """
-    text.replace('(', '( ', text.count('(')).replace(')', ' )', text.count(')')) # add a space after '(' and before ')' so to split them into separate tokens
+    # add a space after '(' and before ')' so to split them into separate tokens
+    text = re.sub(r"\(", r'( ', text)
+    text = re.sub(r"\)", r' )', text)
+    # split the text in words (it eliminates spaces at the beginning/end of words, so even if we add them with the first passage it's not important)
     words = text.split()
     if len(words) == 1:
         print("You cannot use one single word! Use at least two words connected with a logical operator.")
@@ -545,6 +548,7 @@ print(re.sub(r"\((\S)", r'( \1', "(some text)"))      # => (some text)
 print(re.sub(r"\((\S)", r'( \1', "Text(some text)"))  # => Text (some text)
 print(re.sub(r"\((?<!\s)", r'( ', "(some text)"))     # =>  (some text)
 print(re.sub(r"\((\w)", r'( \1', "(some text)"))     # =>  (some text)
+print(re.sub(r"\((\w)", r'( \1', "( some text)"))     # =>  (some text)
 
 text = "Text (!some text) ciao"
 print(text)
@@ -552,22 +556,70 @@ text = re.sub(r"\((\S)", r'( \1', text)
 text = re.sub(r"(\S)\)", r'\1 )', text)
 print(text)
 
+print()
+text = "Text (!some text) ciao (mao)"
+print(text)
+text = re.sub(r"\((\S)", r'( \1', text)
+text = re.sub(r"(\S)\)", r'\1 )', text)
+print(text)
+
+print()
+text = "Text (ciao (!some text) mao) ciao"
+print(text)
+text = re.sub(r"\((\S)", r'( \1', text)
+text = re.sub(r"(\S)\)", r'\1 )', text)
+print(text)
+
+print()
+text = "Text ((!some text)) ciao"
+print(text)
+text = re.sub(r"\((\S)", r'( \1', text)
+text = re.sub(r"(\S)\)", r'\1 )', text)
+print(text)
+text = re.sub(r"\((\S)", r'( \1', text)
+text = re.sub(r"(\S)\)", r'\1 )', text)
+print(text)
+
+re.sub(r"\(", r'( ', "(((")
+
+text = "Text ((!some text)) ciao"
+print(text)
+text = re.sub(r"\((\S)", r'( \1', text)
+text = re.sub(r"(\S)\)", r'\1 )', text)
+text = re.sub(r"\(", r'( ', text)
+print(text)
+
+words = text.split()
+words
+
+text = "Text ((!some text)) ciao"
+print(text)
+text = re.sub(r"\(", r'( ', text)
+words = text.split()
+print(words)
+
+print(words[1] == "(")
+print(words[2] == "(")
+
 def query_a(text: str, noprint=True):
     """ This query can answer to any type of query, also complex ones. Use 'AND', 'OR' and 'NOT'
     and parenthesis to specify how to combine the words in the query.
     E.g. text = "(yoda AND darth) OR Gandalf NOT love"
     """
-    text.replace('(', '( ').replace(')', ' )') # add a space after '(' and before ')' so to split them into separate tokens
+    text = re.sub(r"\(", r'( ', text)
+    text = re.sub(r"\)", r' )', text)
     words = text.split()
+    print(words)
     if len(words) == 1:
         print("You cannot use one single word! Use at least two words connected with a logical operator.")
         return None
     for i, w in enumerate(words):
         if w == "(":
             print("(")
-            while w != ")":
-                print("Continue")
-                continue
+            #while w != ")":
+                #print("Continue")
+
+                #continue
             print(")")
         elif w in ['AND', 'OR', 'NOT']:
             if i == 1:
@@ -578,6 +630,11 @@ def query_a(text: str, noprint=True):
 
 
 test = "Ciao AND bella OR (come AND stai OR boh) AND ciao"
+query_a(test)
+
+print()
+
+test = "Ciao AND bella OR (come AND (stai OR boh)) AND ciao"
 query_a(test)
 
 """### Queries with spelling correction"""
@@ -739,7 +796,10 @@ assert set(yg_not_query) == yg_not_set
 
 yoda_complex_query = query(ir, "yoda", noprint=False)
 
-yoda_par_complex_query = query(ir, "(yoda)", noprint=False)
+try:
+  yoda_par_complex_query = query(ir, "(yoda)", noprint=False)
+except:
+  print("ERROR!!!!!!")
 
 yAdOg_query = query(ir, "yoda AND darth OR Gandalf", noprint=False)
 
@@ -761,6 +821,11 @@ ydg_and_set = yoda_set.union(darth_set).union(gandalf_set)
 yOdOgAl_set = ydg_and_set.intersection(love_set)
 
 assert set(yOdOgAl_query) == yOdOgAl_set
+
+try:
+  yoda_par_complex_query = query(ir, "(yoda AND Gandafl OR (darth OR love))", noprint=False)
+except:
+  print("ERROR!!!!!!")
 
 yAdOgNl_query = query(ir, "yoda AND darth OR Gandalf NOT love", noprint=False)
 
