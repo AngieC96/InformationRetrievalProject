@@ -449,13 +449,10 @@ class IRsystem:
         else:
             postings = self.spelling_correction(norm_words)
         words_plist = reduce(lambda x, y: x.union(y), postings)
-        print(len(words_plist), type(words_plist._postings))
         plist = copy.deepcopy(self._index.complete_plist)
-        print(len(plist))
         for i in words_plist:
             if i in plist:
                 plist._postings.remove(i)
-        print(len(plist))
         return self.get_from_corpus(plist)
 
     def answer_query(self, op: str, words = None, word = None, posting = None):
@@ -688,24 +685,6 @@ assert fyg_or_query == mispelled_or_query
 
 a_not_query = not_query(ir, "a", noprint=True)
 
-a = 3907  # position of the term "a" in the index
-a_not_documents = copy.deepcopy(corpus)
-docs_delete = []
-for i in idx._dictionary[a].posting_list._postings:
-    docs_delete.append(a_not_documents[i._docID])
-
-for i in docs_delete: # otherwise if you remove elements while you scan they shift and you remove the wrong ones!
-    a_not_documents.remove(i)
-
-#documents = list(set(documents))
-print(f"len(a_not_documents): {len(a_not_documents)}, len(a_not_query): {len(a_not_query)}")
-print(f"len(set(a_not_documents)): {len(set(a_not_documents))}, len(set(a_not_query)): {len(set(a_not_query))}")
-
-assert len(a_not_query) == len(corpus) - len(idx._dictionary[a].posting_list)
-assert len(a_not_query) == len(a_not_documents)
-# assert set(a_not_query) == set(a_not_documents) # Don't know why, but it fails
-assert sorted(list(set(a_not_query))) == sorted(list(set(a_not_documents)))
-
 corpus_set = set(corpus)
 a_query = and_query(ir, "a", noprint=True)
 a_set = set(a_query)
@@ -715,48 +694,6 @@ assert set(a_not_query) == a_not_set
 
 lm_not_query = not_query(ir, "love mother", noprint=True)
 
-love = 100979  # position of the term "love" in the index
-mother = 113851  # position of the term "mother" in the index
-lm_not_documents = copy.deepcopy(corpus)
-docs_delete = []
-for i in idx._dictionary[love].posting_list._postings:
-    docs_delete.append(lm_not_documents[i._docID])
-for i in idx._dictionary[mother].posting_list._postings:
-    docs_delete.append(lm_not_documents[i._docID])
-
-for i in docs_delete: # otherwise if you remove elements while you scan they shift and you remove the wrong ones!
-    if i in lm_not_documents:
-        lm_not_documents.remove(i)
-
-#documents = list(set(documents))
-print(f"len(lm_not_documents): {len(lm_not_documents)}, len(lm_not_query): {len(lm_not_query)}")
-print(f"len(set(lm_not_documents)): {len(set(lm_not_documents))}, len(set(lm_not_query)): {len(set(lm_not_query))}")
-
-print(len(lm_not_query), len(corpus) - len(idx._dictionary[love].posting_list) - len(idx._dictionary[mother].posting_list))
-
-lm_not_documents = copy.deepcopy(corpus)
-docs_delete = []
-lm_postings = idx._dictionary[love].posting_list.union(idx._dictionary[mother].posting_list)
-
-for i in lm_postings._postings:
-    docs_delete.append(lm_not_documents[i._docID])
-
-for i in docs_delete: # otherwise if you remove elements while you scan they shift and you remove the wrong ones!
-    lm_not_documents.remove(i)
-
-#documents = list(set(documents))
-print(f"len(lm_not_documents): {len(lm_not_documents)}, len(lm_not_query): {len(lm_not_query)}")
-print(f"lm_not_documents == lm_not_query: {lm_not_documents == lm_not_query}")
-print(f"len(set(lm_not_documents)): {len(set(lm_not_documents))}, len(set(lm_not_query)): {len(set(lm_not_query))}")
-
-print(f"len(lm_postings): {len(lm_postings)}")
-print(len(lm_not_query), len(corpus) - len(lm_postings))
-
-#assert len(lm_not_query) == len(corpus) - len(lm_postings)
-#assert len(lm_not_query) == len(lm_not_documents)
-# assert set(lm_not_query) == set(lm_not_documents) # Don't know why, but it fails
-#assert sorted(list(set(lm_not_query))) == sorted(list(set(lm_not_documents)))
-
 love_set = set(love_query)
 mother_query = and_query(ir, "mother")
 mother_set = set(mother_query)
@@ -764,6 +701,13 @@ lm_set = love_set.union(mother_set)
 lm_not_set = corpus_set.difference(lm_set)
 
 assert set(lm_not_query) == lm_not_set
+
+yg_not_query = not_query(ir, "yoda Gandalf", noprint=True)
+
+yg_set = yoda_set.union(gandalf_set)
+yg_not_set = corpus_set.difference(yg_set)
+
+assert set(yg_not_query) == yg_not_set
 
 """### Compex queries"""
 
@@ -776,8 +720,8 @@ assert set(yAdOg_query) == yAdOg_set
 
 yOdAg_query = query(ir, "yoda OR darth AND Gandalf", noprint=False)
 
-yd_and_set = yoda_set.union(darth_set)
-yOdAg_set = yd_and_set.intersection(gandalf_set)
+yd_or_set = yoda_set.union(darth_set)
+yOdAg_set = yd_or_set.intersection(gandalf_set)
 
 assert set(yOdAg_query) == yOdAg_set
 
