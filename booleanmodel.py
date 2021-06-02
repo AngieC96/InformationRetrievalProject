@@ -455,34 +455,34 @@ class IRsystem:
                 plist._postings.remove(i)
         return self.get_from_corpus(plist)
 
-    def answer_query(self, op: str, words = None, word = None, postings = None, postings2 = None):
+    def answer_query(self, op: str, words = None, word = None, postings = None, postings2 = None, NOT_switch = False):
+        ''' Complex query.
+        Arguments:
+          NOT_switch -- Used to switch the order of the two posting lists `postings` and `postings2` in the NOT query, since this operator is not commutative.
+        '''
         if words:
-            norm_words = map(normalize, words)
-            words_postings = map(lambda w: self._index[w], norm_words)
-            if op == 'AND':
-                plist = reduce(lambda x, y: x.intersection(y), words_postings)
-            elif op == 'OR':
-                plist = reduce(lambda x, y: x.union(y), words_postings)
-            elif op == 'NOT':
-                words_postings = list(words_postings)
-                for i in words_postings[1]:
-                    if i in words_postings[0]:
-                        words_postings[0]._postings.remove(i)
-                return words_postings[0]
-        else:
-            if word:
-                norm_word = normalize(word)
-                postings2 = self._index[norm_word]
-            if op == 'AND':
-                plist = postings.intersection(postings2)
-            elif op == 'OR':
-                plist = postings.union(postings2)
-            elif op == 'NOT':
+            postings = self._index[normalize(words[0])]
+            postings2 = self._index[normalize(words[1])]
+        elif word:
+            postings2 = self._index[normalize(word)]
+
+        if op == 'AND':
+            plist = postings.intersection(postings2)
+            return plist
+        elif op == 'OR':
+            plist = postings.union(postings2)
+            return plist
+        elif op == 'NOT':
+            if not NOT_switch:
                 for i in postings2:
                     if i in postings:
                         postings._postings.remove(i)
                 return postings
-        return plist
+            else:
+                for i in postings:
+                    if i in postings2:
+                        postings2._postings.remove(i)
+                return postings2
 
 """### Queries"""
 
@@ -566,14 +566,16 @@ def query_with_pars(text: str, noprint=True):
         # Process the query in these parenthesis, the remove o in openp and c in closep
         for i, w in enumerate(words_mod[o+1 : c]):
             if w in ['AND', 'OR', 'NOT']:
-                if type(words_mod[(o+1) + i-1]) == str and type(words_mod[(o+1) + i+1]) == str:
-                    plist = ir.answer_query(op = w, words = [words_mod[(o+1) + i-1], words_mod[(o+1) + i+1]])
-                elif type(words_mod[(o+1) + i-1]) == PostingList and type(words_mod[(o+1) + i+1]) == str:
-                    plist = ir.answer_query(op = w, word = words_mod[(o+1) + i+1], postings = plist)
-                elif type(words_mod[(o+1) + i-1]) == PostingList and type(words_mod[(o+1) + i+1]) == str:
-                    plist = ir.answer_query(op = w, word = words_mod[(o+1) + i-1], postings = plist)
-                elif type(words_mod[(o+1) + i-1]) == PostingList and type(words_mod[(o+1) + i+1]) == PostingList:
-                    ????
+                item1 = words_mod[(o+1) + i-1]
+                item2 = words_mod[(o+1) + i+1]
+                if type(item1) == str and type(item2) == str:
+                    plist = ir.answer_query(op = w, words = [item1, item2])
+                elif type(item1) == PostingList and type(item2) == str:
+                    plist = ir.answer_query(op = w, word = item2, postings = item1)
+                elif type(item1) == str and type(item2) == PostingList:
+                    plist = ir.answer_query(op = w, word = item1, postings = item2, NOT_switch = True)
+                elif type(item1) == PostingList and type(item2) == PostingList:
+                    plist = ir.answer_query(op = w, postings = item1, postings2 = item2)
         words_mod[o] = plist
         del words_mod[o+1:c+1]
         print(words_mod)
