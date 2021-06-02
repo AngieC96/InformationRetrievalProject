@@ -523,9 +523,7 @@ def query(ir: IRsystem, text: str, noprint=True):
         print("You cannot use one single word! Use at least two words connected with a logical operator.")
         return None
     for i, w in enumerate(words):
-        if w == "(":
-            pass
-        elif w in ['AND', 'OR', 'NOT']:
+        if w in ['AND', 'OR', 'NOT']:
             if i == 1:
                 partial_answer = ir.answer_query(op = w, words = [words[i-1], words[i+1]])
             else:
@@ -536,7 +534,7 @@ def query(ir: IRsystem, text: str, noprint=True):
             print(movie)
     return answer
 
-def query_a(text: str, noprint=True):
+def query_with_pars(text: str, noprint=True):
     """ This query can answer to any type of query, also complex ones. Use 'AND', 'OR' and 'NOT'
     and parenthesis to specify how to combine the words in the query.
     E.g. text = "(yoda AND darth) OR Gandalf NOT love"
@@ -544,52 +542,67 @@ def query_a(text: str, noprint=True):
     text = re.sub(r"\(", r'( ', text)
     text = re.sub(r"\)", r' )', text)
     words = text.split()
+    words_mod = copy.deepcopy(words)
     print(words)
     if len(words) == 1:
         print("You cannot use one single word! Use at least two words connected with a logical operator.")
         return None
-    words_iter = iter(enumerate(words))
-    for w in words_iter:
-        #print(w)
-        if w[1] == "(":
-            print("(")
-            while (w[1] != ")"):
-                if w[1] in ['AND', 'OR', 'NOT']:
-                    print(w)
-                w = next(words_iter)
-            print(")")
-        elif w[1] in ['AND', 'OR', 'NOT']:
-            if i == 1:
-                print(w)
-            else:
-                print(w)
+    openp = []
+    closep = []
+    for i, w in enumerate(words):
+        if w == "(": openp.append(i)
+        elif w == ")": closep.append(i)
+
+    print(openp, closep)
+
+    while closep:
+        c = closep[0]
+        print(c)
+        o = None
+        for i in openp:
+            if i < c:
+                o = i
+        print(o)
+        # Process the query in these parenthesis, the remove o in openp and c in closep
+        for i in range(o + 1, c):
+            print(f"\t {i} {words_mod[i]}")
+        plist = PostingList()
+        words_mod[o] = plist
+        del words_mod[o+1:c+1]
+        print(words_mod)
+        openp = []
+        closep = []
+        for i, w in enumerate(words_mod):
+            if w == "(": openp.append(i)
+            elif w == ")": closep.append(i)
+
     return
+
+test = "ciao AND ((come AND (stai OR tu) OR io AND (bene AND tu) OR ho) AND caldo AND (sonno OR fame) AND freddo)"
+print(test)
+query_with_pars(test)
 
 test = "Ciao AND bella OR (come AND stai OR boh) AND ciao"
 print(test)
-query_a(test)
+query_with_pars(test)
 
 print()
 
 test = "Ciao AND bella OR (come AND (stai OR boh)) AND ciao"
 print(test)
-query_a(test)
+query_with_pars(test)
 
 print()
 
 test = "Ciao AND bella OR (come AND (stai OR boh) NOT miao) AND ciao"
 print(test)
-query_a(test)
+query_with_pars(test)
 
-words = ['Ciao', 'AND', 'bella', 'OR', '(', 'come', 'AND', 'stai', 'OR', 'boh', ')', 'AND', 'ciao']
-words_iter = iter(enumerate(words))
-i = next(words_iter)
-print(i)
-i = next(words_iter)
-print(i)
+print()
 
-for w in words_iter:
-  print(w)
+test = "Ciao AND bella OR (come AND (stai OR boh) NOT miao AND (indice OR me) OR tu) AND ciao"
+print(test)
+query_with_pars(test)
 
 """### Queries with spelling correction"""
 
@@ -750,11 +763,6 @@ assert set(yg_not_query) == yg_not_set
 
 yoda_complex_query = query(ir, "yoda", noprint=False)
 
-try:
-  yoda_par_complex_query = query(ir, "(yoda)", noprint=False)
-except:
-  print("ERROR!!!!!!")
-
 yAdOg_query = query(ir, "yoda AND darth OR Gandalf", noprint=False)
 
 yd_and_set = yoda_set.intersection(darth_set)
@@ -776,11 +784,6 @@ yOdOgAl_set = ydg_and_set.intersection(love_set)
 
 assert set(yOdOgAl_query) == yOdOgAl_set
 
-try:
-  yoda_par_complex_query = query(ir, "(yoda AND Gandafl OR (darth OR love))", noprint=False)
-except:
-  print("ERROR!!!!!!")
-
 yAdOgNl_query = query(ir, "yoda AND darth OR Gandalf NOT love", noprint=False)
 
 yAdOgNl_set = yAdOg_set.difference(love_set)
@@ -793,5 +796,17 @@ yNd_set = yoda_set.difference(darth_set)
 yNdOg_set = yNd_set.union(gandalf_set)
 
 assert set(yNdOg_query) == yNdOg_set
+
+"""#### Using parenthesis"""
+
+try:
+  yoda_par_complex_query = query(ir, "(yoda)", noprint=False)
+except:
+  print("ERROR!!!!!!")
+
+try:
+  yoda_par_complex_query = query(ir, "(yoda AND Gandafl OR (darth OR love))", noprint=False)
+except:
+  print("ERROR!!!!!!")
 
 #query(ir, "(yoda AND darth) OR Gandalf NOT love", noprint=False)
