@@ -474,15 +474,17 @@ class IRsystem:
             return plist
         elif op == 'NOT':
             if not NOT_switch:
+                postings_copy = copy.deepcopy(postings)
                 for i in postings2:
-                    if i in postings:
-                        postings._postings.remove(i)
-                return postings
+                    if i in postings_copy:
+                        postings_copy._postings.remove(i)
+                return postings_copy
             else:
+                postings2_copy = copy.deepcopy(postings2)
                 for i in postings:
-                    if i in postings2:
-                        postings2._postings.remove(i)
-                return postings2
+                    if i in postings2_copy:
+                        postings2_copy._postings.remove(i)
+                return postings2_copy
 
 """### Queries"""
 
@@ -514,10 +516,6 @@ def query(ir: IRsystem, text: str, noprint=True):
     """ This query can answer complex queries with 'AND', 'OR' and 'NOT' but without parentheses.
     E.g. text = "yoda AND darth OR Gandalf NOT love"
     """
-    # add a space after '(' and before ')' so to split them into separate tokens
-    text = re.sub(r"\(", r'( ', text)
-    text = re.sub(r"\)", r' )', text)
-    # split the text in words (it eliminates spaces at the beginning/end of words, so even if we add them with the first passage it's not important)
     words = text.split()
     if len(words) == 1:
         print("You cannot use one single word! Use at least two words connected with a logical operator.")
@@ -525,99 +523,87 @@ def query(ir: IRsystem, text: str, noprint=True):
     for i, w in enumerate(words):
         if w in ['AND', 'OR', 'NOT']:
             if i == 1:
-                partial_answer = ir.answer_query(op = w, words = [words[i-1], words[i+1]])
+                plist = ir.answer_query(op = w, words = [words[i-1], words[i+1]])
             else:
-                partial_answer = ir.answer_query(op = w, word = words[i+1], postings = partial_answer)
-    answer = ir.get_from_corpus(partial_answer)
+                plist = ir.answer_query(op = w, word = words[i+1], postings = plist)
+    answer = ir.get_from_corpus(plist)
     if not noprint:
         for movie in answer:
             print(movie)
     return answer
 
-def query_with_pars(text: str, noprint=True):
+def query_with_pars(ir: IRsystem, text: str, noprint=True):
     """ This query can answer to any type of query, also complex ones. Use 'AND', 'OR' and 'NOT'
     and parenthesis to specify how to combine the words in the query.
     E.g. text = "(yoda AND darth) OR Gandalf NOT love"
     """
+    # add a space after '(' and before ')' so to split them into separate tokens
     text = re.sub(r"\(", r'( ', text)
     text = re.sub(r"\)", r' )', text)
+    # split the text in words (it eliminates spaces at the beginning/end of words, so even if we add them with the first passage it's not important)
     words = text.split()
-    words_mod = copy.deepcopy(words)
-    print(words)
-    if len(words) == 1:
+
+    if len(words) == 1 or (len(words) == 3 and ("(" in words or ")" in words)):
         print("You cannot use one single word! Use at least two words connected with a logical operator.")
         return None
+
+    # words_mod = copy.deepcopy(words) # For now not necessary, I don't reuse the array 'words'
+    words_mod = words                  # I write it like this so it is easy to change is 'words' will be needed
+    # Wrap the text in two parentheses so to perform the following while one last time, avoiding to repeat code, and compute the whole query
+    words_mod.insert(0, "(")
+    words_mod.append(")")
+    
     openp = []
     closep = []
-    for i, w in enumerate(words):
+    for i, w in enumerate(words_mod):
         if w == "(": openp.append(i)
         elif w == ")": closep.append(i)
-
-    print(openp, closep)
+    
+    if len(openp) != len(closep):
+        print("The number of open parentheses is different from the number of closed parentheses.")
+        return None
 
     while closep:
         c = closep[0]
-        print(c)
         o = None
         for i in openp:
             if i < c:
                 o = i
-        print(o)
+        #plist = PostingList()  # wrong, since if there are extra parentheses around all the query I overwrite the last plist and I store in words_mod an empty plist
         # Process the query in these parenthesis, the remove o in openp and c in closep
         for i, w in enumerate(words_mod[o+1 : c]):
             if w in ['AND', 'OR', 'NOT']:
-                item1 = words_mod[(o+1) + i-1]
-                item2 = words_mod[(o+1) + i+1]
-                if type(item1) == str and type(item2) == str:
-                    plist = ir.answer_query(op = w, words = [item1, item2])
-                elif type(item1) == PostingList and type(item2) == str:
-                    plist = ir.answer_query(op = w, word = item2, postings = item1)
-                elif type(item1) == str and type(item2) == PostingList:
-                    plist = ir.answer_query(op = w, word = item1, postings = item2, NOT_switch = True)
-                elif type(item1) == PostingList and type(item2) == PostingList:
-                    plist = ir.answer_query(op = w, postings = item1, postings2 = item2)
+                if i == 1:
+                    item1 = words_mod[(o+1) + i-1]
+                    item2 = words_mod[(o+1) + i+1]
+                    # Checks to call `ir.answer_query` in the right way
+                    if type(item1) == str and type(item2) == str:
+                        plist = ir.answer_query(op = w, words = [item1, item2])
+                    elif type(item1) == PostingList and type(item2) == str:
+                        plist = ir.answer_query(op = w, word = item2, postings = item1)
+                    elif type(item1) == str and type(item2) == PostingList:
+                        plist = ir.answer_query(op = w, word = item1, postings = item2, NOT_switch = True)
+                    elif type(item1) == PostingList and type(item2) == PostingList:
+                        plist = ir.answer_query(op = w, postings = item1, postings2 = item2)
+                else:
+                    item2 = words_mod[(o+1) + i+1]
+                    if type(item2) == str:
+                        plist = ir.answer_query(op = w, word = item2, postings = plist)
+                    elif type(item2) == PostingList:
+                        plist = ir.answer_query(op = w, postings = plist, postings2 = item2)
         words_mod[o] = plist
         del words_mod[o+1:c+1]
-        print(words_mod)
         openp = []
         closep = []
         for i, w in enumerate(words_mod):
             if w == "(": openp.append(i)
             elif w == ")": closep.append(i)
-
-    return
-
-plist = PostingList()
-print(type(plist))
-print(type(plist) == PostingList)
-a = 3
-print(type(a) == PostingList)
-
-test = "hi AND ((how AND (are OR you) OR I AND (am AND fine) OR I) AND am AND (sleepy OR hungry) AND cold)"
-print(test)
-#query_with_pars(test)
-
-test = "Ciao AND bella OR (come AND stai OR boh) AND ciao"
-print(test)
-#query_with_pars(test)
-
-print()
-
-test = "Ciao AND bella OR (come AND (stai OR boh)) AND ciao"
-print(test)
-#query_with_pars(test)
-
-print()
-
-test = "Ciao AND bella OR (come AND (stai OR boh) NOT miao) AND ciao"
-print(test)
-#query_with_pars(test)
-
-print()
-
-test = "Ciao AND bella OR (come AND (stai OR boh) NOT miao AND (indice OR me) OR tu) AND ciao"
-print(test)
-#query_with_pars(test)
+    
+    answer = ir.get_from_corpus(plist)
+    if not noprint:
+        for movie in answer:
+            print(movie)
+    return answer
 
 """### Queries with spelling correction"""
 
@@ -776,7 +762,7 @@ assert set(yg_not_query) == yg_not_set
 
 """### Compex queries"""
 
-yoda_complex_query = query(ir, "yoda", noprint=False)
+query(ir, "yoda", noprint=False)
 
 yAdOg_query = query(ir, "yoda AND darth OR Gandalf", noprint=False)
 
@@ -784,6 +770,10 @@ yd_and_set = yoda_set.intersection(darth_set)
 yAdOg_set = yd_and_set.union(gandalf_set)
 
 assert set(yAdOg_query) == yAdOg_set
+
+yAdOg_query2 = query_with_pars(ir, "yoda AND darth OR Gandalf", noprint=False)
+
+assert set(yAdOg_query2) == yAdOg_set
 
 yOdAg_query = query(ir, "yoda OR darth AND Gandalf", noprint=False)
 
@@ -812,16 +802,48 @@ yNdOg_set = yNd_set.union(gandalf_set)
 
 assert set(yNdOg_query) == yNdOg_set
 
-"""#### Using parenthesis"""
+"""#### Using parentheses"""
 
-try:
-  yoda_par_complex_query = query(ir, "(yoda)", noprint=False)
-except:
-  print("ERROR!!!!!!")
+query_with_pars(ir, "(yoda)", noprint=False)
 
-try:
-  yoda_par_complex_query = query(ir, "(yoda AND Gandafl OR (darth OR love))", noprint=False)
-except:
-  print("ERROR!!!!!!")
+pyAdpOgNl_query = query_with_pars(ir, "(yoda AND darth) OR Gandalf NOT love", noprint=False)
 
-#query(ir, "(yoda AND darth) OR Gandalf NOT love", noprint=False)
+assert set(pyAdpOgNl_query) == yAdOgNl_set
+
+yApdOgpNl_query = query_with_pars(ir, "yoda AND (darth OR Gandalf) NOT love", noprint=False)
+
+dOg_set = darth_set.union(gandalf_set)
+yApdOgpNl = yoda_set.intersection(dOg_set).difference(love_set)
+
+assert set(yApdOgpNl_query) == yApdOgpNl
+
+yOgApdOlp_complex_query = query_with_pars(ir, "(yoda OR Gandalf AND (darth OR love))", noprint=False)
+
+dOl_set = darth_set.union(love_set)
+yOgApdNlp_set = yoda_set.union(gandalf_set).intersection(dOl_set)
+
+assert set(yOgApdOlp_complex_query) == yOgApdNlp_set
+
+yOpgApdOlpNmpOphNap_complex_query = query_with_pars(ir, "yoda OR (Gandalf AND (darth OR love) NOT mother) OR (hello NOT a)", noprint=False)
+
+gApdOlpNm_set = gandalf_set.intersection(dOl_set).difference(mother_set)
+hello_set = set(and_query(ir, "hello"))
+hNa_set = hello_set.difference(a_set)
+yOpgApdOlpNmpOphNap_set = yoda_set.union(gApdOlpNm_set).union(hNa_set)
+
+assert set(yOpgApdOlpNmpOphNap_complex_query) == yOpgApdOlpNmpOphNap_set
+
+test = "hi OR ((how AND (are OR you) OR I AND (am AND fine) OR I) AND am AND (sleepy OR hungry) AND cold)"
+hOphApaOypOiApaAfpOiAaApsOhpAcp_query = query_with_pars(ir, test, noprint=False)
+
+"hi OR ((how AND (are OR you) OR I AND (am AND fine) OR I) AND am AND (sleepy OR hungry) AND cold)"
+aOy_set = set(and_query(ir, "are")).union(set(and_query(ir, "you")))
+am_set = set(and_query(ir, "am"))
+aAf_set = am_set.intersection(set(and_query(ir, "fine")))
+i_set = set(and_query(ir, "I"))
+hApaOypOiApaAfpOi_set = set(and_query(ir, "how")).intersection(aOy_set).union(i_set).intersection(aAf_set).union(i_set)
+sOh_set = set(and_query(ir, "sleepy")).union(set(and_query(ir, "hungry")))
+hApaOypOiApaAfpOiAaApsOhpAc_set = hApaOypOiApaAfpOi_set.intersection(am_set).intersection(sOh_set).intersection(set(and_query(ir, "cold")))
+hOphApaOypOiApaAfpOiAaApsOhpAcp_set = set(and_query(ir, "hi")).union(hApaOypOiApaAfpOiAaApsOhpAc_set)
+
+assert set(hOphApaOypOiApaAfpOiAaApsOhpAcp_query) == hOphApaOypOiApaAfpOiAaApsOhpAcp_set
