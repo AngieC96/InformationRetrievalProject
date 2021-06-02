@@ -455,7 +455,7 @@ class IRsystem:
                 plist._postings.remove(i)
         return self.get_from_corpus(plist)
 
-    def answer_query(self, op: str, words = None, word = None, postings = None):
+    def answer_query(self, op: str, words = None, word = None, postings = None, postings2 = None):
         if words:
             norm_words = map(normalize, words)
             words_postings = map(lambda w: self._index[w], norm_words)
@@ -470,14 +470,15 @@ class IRsystem:
                         words_postings[0]._postings.remove(i)
                 return words_postings[0]
         else:
-            norm_word = normalize(word)
-            word_postings = self._index[norm_word]
+            if word:
+                norm_word = normalize(word)
+                postings2 = self._index[norm_word]
             if op == 'AND':
-                plist = postings.intersection(word_postings)
+                plist = postings.intersection(postings2)
             elif op == 'OR':
-                plist = postings.union(word_postings)
+                plist = postings.union(postings2)
             elif op == 'NOT':
-                for i in word_postings:
+                for i in postings2:
                     if i in postings:
                         postings._postings.remove(i)
                 return postings
@@ -510,9 +511,8 @@ def not_query(ir: IRsystem, text: str, noprint=True):
     return answer
 
 def query(ir: IRsystem, text: str, noprint=True):
-    """ This query can answer to any type of query, also complex ones. Use 'AND', 'OR' and 'NOT'
-    and parenthesis to specify how to combine the words in the query.
-    E.g. text = "(yoda AND darth) OR Gandalf NOT love"
+    """ This query can answer complex queries with 'AND', 'OR' and 'NOT' but without parentheses.
+    E.g. text = "yoda AND darth OR Gandalf NOT love"
     """
     # add a space after '(' and before ')' so to split them into separate tokens
     text = re.sub(r"\(", r'( ', text)
@@ -564,9 +564,16 @@ def query_with_pars(text: str, noprint=True):
                 o = i
         print(o)
         # Process the query in these parenthesis, the remove o in openp and c in closep
-        for i in range(o + 1, c):
-            print(f"\t {i} {words_mod[i]}")
-        plist = PostingList()
+        for i, w in enumerate(words_mod[o+1 : c]):
+            if w in ['AND', 'OR', 'NOT']:
+                if type(words_mod[(o+1) + i-1]) == str and type(words_mod[(o+1) + i+1]) == str:
+                    plist = ir.answer_query(op = w, words = [words_mod[(o+1) + i-1], words_mod[(o+1) + i+1]])
+                elif type(words_mod[(o+1) + i-1]) == PostingList and type(words_mod[(o+1) + i+1]) == str:
+                    plist = ir.answer_query(op = w, word = words_mod[(o+1) + i+1], postings = plist)
+                elif type(words_mod[(o+1) + i-1]) == PostingList and type(words_mod[(o+1) + i+1]) == str:
+                    plist = ir.answer_query(op = w, word = words_mod[(o+1) + i-1], postings = plist)
+                elif type(words_mod[(o+1) + i-1]) == PostingList and type(words_mod[(o+1) + i+1]) == PostingList:
+                    ????
         words_mod[o] = plist
         del words_mod[o+1:c+1]
         print(words_mod)
@@ -578,31 +585,37 @@ def query_with_pars(text: str, noprint=True):
 
     return
 
-test = "ciao AND ((come AND (stai OR tu) OR io AND (bene AND tu) OR ho) AND caldo AND (sonno OR fame) AND freddo)"
+plist = PostingList()
+print(type(plist))
+print(type(plist) == PostingList)
+a = 3
+print(type(a) == PostingList)
+
+test = "hi AND ((how AND (are OR you) OR I AND (am AND fine) OR I) AND am AND (sleepy OR hungry) AND cold)"
 print(test)
-query_with_pars(test)
+#query_with_pars(test)
 
 test = "Ciao AND bella OR (come AND stai OR boh) AND ciao"
 print(test)
-query_with_pars(test)
+#query_with_pars(test)
 
 print()
 
 test = "Ciao AND bella OR (come AND (stai OR boh)) AND ciao"
 print(test)
-query_with_pars(test)
+#query_with_pars(test)
 
 print()
 
 test = "Ciao AND bella OR (come AND (stai OR boh) NOT miao) AND ciao"
 print(test)
-query_with_pars(test)
+#query_with_pars(test)
 
 print()
 
 test = "Ciao AND bella OR (come AND (stai OR boh) NOT miao AND (indice OR me) OR tu) AND ciao"
 print(test)
-query_with_pars(test)
+#query_with_pars(test)
 
 """### Queries with spelling correction"""
 
@@ -671,11 +684,6 @@ fg_and_query = and_query(ir, "frodo Gandalf", noprint=False)
 
 yld_and_query = and_query(ir, "yoda Luke darth", noprint=False)
 
-try:
-    and_query(ir, "thig")
-except KeyError:
-    print(sys.exc_info()[1])
-
 frodo_query = and_query(ir, "frodo")
 frodo_set = set(frodo_query)
 
@@ -698,6 +706,11 @@ darth_set = set(darth_query)
 yld_and_set = yoda_set.intersection(luke_set).intersection(darth_set)
 
 assert set(yld_and_query) == yld_and_set
+
+try:
+    and_query(ir, "thig")
+except KeyError:
+    print(sys.exc_info()[1])
 
 """### AND queries with spelling correction"""
 
