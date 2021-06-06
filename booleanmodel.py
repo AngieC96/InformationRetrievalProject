@@ -239,7 +239,19 @@ def update_progress(progress):
     sys.stdout.write(text)
     sys.stdout.flush()
 
-"""An `InvertedIndex` object contains a dictionary with as keys the words and as values the `Term` associated to that word, which, we reall, contains the `PostingList` associated to the word.
+"""In an inverted index we store, for each term, the list of documents containing it.
+
+So an `InvertedIndex` object contains a dictionary `_dictionary` with as keys the words themselves and as values the `Term` associated to each word, which, we recall, contains the `PostingList` associated to the word.\
+It also stores a list with all the Postings, `complete_plist`, used to answer the NOT queries.
+
+
+#### Phrase queries
+
+Answering a phrase query with positional indexing
+We perform something like the intersection only that now we have to go inside and check the
+position.
+We need to check if the two terms appear in adjacent positions → We search if they are contained
+in the same document and if they are one after the other.
 
 #### Data structure
 
@@ -343,7 +355,7 @@ def read_movie_descriptions():
 
 """## Edit distance
 
-By computing the edit distance we can find the set of words that are the closest to a misspelled word. However, computing the edit distance on the entire dictionary can be too expensive. We can use some heuristics to limit the number of words, like looking only at words with the same initial letter (hopefully this has not been misspelled).
+By computing the edit distance we can find the set of words that are the closest to a misspelled word. However, computing the edit distance on the entire dictionary can be too expensive. We can use some heuristics to limit the number of words, like looking only at words with the same initial letter (hopefully this has not been misspelled). The latter is what is implemented in this model.
 """
 
 def edit_distance(u, v, print = False):
@@ -666,39 +678,39 @@ print(idx)
 
 ir = IRsystem(corpus, idx)
 
+try:
+  ir.get_from_corpus(ir._index[normalize("thig")])
+except KeyError:
+    print(sys.exc_info()[1])
+
 """### AND queries"""
 
 fg_and_query = and_query(ir, "frodo Gandalf", noprint=False)
 
 yld_and_query = and_query(ir, "yoda Luke darth", noprint=False)
 
-frodo_query = and_query(ir, "frodo")
+frodo_query = ir.get_from_corpus(ir._index[normalize("frodo")])
 frodo_set = set(frodo_query)
 
-gandalf_query = and_query(ir, "Gandalf")
+gandalf_query = ir.get_from_corpus(ir._index[normalize("Gandalf")])
 gandalf_set = set(gandalf_query)
 
 fg_and_set = frodo_set.intersection(gandalf_set)
 
 assert set(fg_and_query) == fg_and_set
 
-yoda_query = and_query(ir, "yoda")
+yoda_query = ir.get_from_corpus(ir._index[normalize("yoda")])
 yoda_set = set(yoda_query)
 
-luke_query = and_query(ir, "Luke")
+luke_query = ir.get_from_corpus(ir._index[normalize("Luke")])
 luke_set = set(luke_query)
 
-darth_query = and_query(ir, "darth")
+darth_query = ir.get_from_corpus(ir._index[normalize("darth")])
 darth_set = set(darth_query)
 
 yld_and_set = yoda_set.intersection(luke_set).intersection(darth_set)
 
 assert set(yld_and_query) == yld_and_set
-
-try:
-    and_query(ir, "thig")
-except KeyError:
-    print(sys.exc_info()[1])
 
 """### AND queries with spelling correction"""
 
@@ -720,7 +732,7 @@ fyg_or_set = set(frodo_query + yoda_query + gandalf_query)
 
 assert set(fyg_or_query) == fyg_or_set
 
-love_query = and_query(ir, "love")
+love_query = ir.get_from_corpus(ir._index[normalize("love")])
 fyl_or_query = or_query(ir, "frodo yoda love")
 fyl_or_set = set(frodo_query + yoda_query + love_query)
 
@@ -737,7 +749,7 @@ assert fyg_or_query == mispelled_or_query
 a_not_query = not_query(ir, "a", noprint=True)
 
 corpus_set = set(corpus)
-a_query = and_query(ir, "a", noprint=True)
+a_query = ir.get_from_corpus(ir._index[normalize("a")])
 a_set = set(a_query)
 a_not_set = corpus_set.difference(a_set)
 
@@ -746,7 +758,7 @@ assert set(a_not_query) == a_not_set
 lm_not_query = not_query(ir, "love mother", noprint=True)
 
 love_set = set(love_query)
-mother_query = and_query(ir, "mother")
+mother_query = ir.get_from_corpus(ir._index[normalize("mother")])
 mother_set = set(mother_query)
 lm_set = love_set.union(mother_set)
 lm_not_set = corpus_set.difference(lm_set)
@@ -827,23 +839,25 @@ assert set(yOgApdOlp_complex_query) == yOgApdNlp_set
 yOpgApdOlpNmpOphNap_complex_query = query_with_pars(ir, "yoda OR (Gandalf AND (darth OR love) NOT mother) OR (hello NOT a)", noprint=False)
 
 gApdOlpNm_set = gandalf_set.intersection(dOl_set).difference(mother_set)
-hello_set = set(and_query(ir, "hello"))
+hello_set = set(ir.get_from_corpus(ir._index[normalize("hello")]))
 hNa_set = hello_set.difference(a_set)
 yOpgApdOlpNmpOphNap_set = yoda_set.union(gApdOlpNm_set).union(hNa_set)
 
 assert set(yOpgApdOlpNmpOphNap_complex_query) == yOpgApdOlpNmpOphNap_set
 
-test = "hi OR ((how AND (are OR you) OR I AND (am AND fine) OR I) AND am AND (sleepy OR hungry) AND cold)"
+test = "hello OR ((how AND (are OR you) OR I AND (am AND fine) OR I) AND am AND (sleepy OR hungry) AND cold)"
 hOphApaOypOiApaAfpOiAaApsOhpAcp_query = query_with_pars(ir, test, noprint=False)
 
-"hi OR ((how AND (are OR you) OR I AND (am AND fine) OR I) AND am AND (sleepy OR hungry) AND cold)"
-aOy_set = set(and_query(ir, "are")).union(set(and_query(ir, "you")))
-am_set = set(and_query(ir, "am"))
-aAf_set = am_set.intersection(set(and_query(ir, "fine")))
-i_set = set(and_query(ir, "I"))
-hApaOypOiApaAfpOi_set = set(and_query(ir, "how")).intersection(aOy_set).union(i_set).intersection(aAf_set).union(i_set)
-sOh_set = set(and_query(ir, "sleepy")).union(set(and_query(ir, "hungry")))
+are_set = set(ir.get_from_corpus(ir._index[normalize("are")]))
+you_set = set(ir.get_from_corpus(ir._index[normalize("you")]))
+aOy_set = are_set.union(you_set)
+am_set = set(ir.get_from_corpus(ir._index[normalize("am")]))
+aAf_set = am_set.intersection(set(ir.get_from_corpus(ir._index[normalize("fine")])))
+i_set = set(ir.get_from_corpus(ir._index[normalize("I")]))
+how_set = set(ir.get_from_corpus(ir._index[normalize("how")]))
+hApaOypOiApaAfpOi_set = how_set.intersection(aOy_set).union(i_set).intersection(aAf_set).union(i_set)
+sOh_set = set(ir.get_from_corpus(ir._index[normalize("sleepy")])).union(set(ir.get_from_corpus(ir._index[normalize("hungry")])))
 hApaOypOiApaAfpOiAaApsOhpAc_set = hApaOypOiApaAfpOi_set.intersection(am_set).intersection(sOh_set).intersection(set(and_query(ir, "cold")))
-hOphApaOypOiApaAfpOiAaApsOhpAcp_set = set(and_query(ir, "hi")).union(hApaOypOiApaAfpOiAaApsOhpAc_set)
+hOphApaOypOiApaAfpOiAaApsOhpAcp_set = hello_set.union(hApaOypOiApaAfpOiAaApsOhpAc_set)
 
 assert set(hOphApaOypOiApaAfpOiAaApsOhpAcp_query) == hOphApaOypOiApaAfpOiAaApsOhpAcp_set
