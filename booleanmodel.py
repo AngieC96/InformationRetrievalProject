@@ -427,7 +427,6 @@ class IRsystem:
                 print("{} not found. Did you mean {}?".format(w, sub))
                 res = self._index[sub]
             postings.append(res)
-        print()
         return postings
 
     def answer_and_query(self, words: List[str], spellingCorrection = False):
@@ -454,6 +453,7 @@ class IRsystem:
 
     def answer_not_query(self, words: List[str], spellingCorrection = False):
         """ NOT-query (if `words` is longer than 1, the words are connected using an AND and then the NOT is performed)
+        If `spellingCorrection` is `True` with spelling correction
         """
         norm_words = map(normalize, words)
         if not spellingCorrection:
@@ -467,16 +467,27 @@ class IRsystem:
                 plist._postings.remove(i)
         return self.get_from_corpus(plist)
 
-    def answer_query(self, op: str, words = None, word = None, postings = None, postings2 = None, NOT_switch = False):
+    def answer_query(self, op: str, words = None, word = None, postings = None, postings2 = None, NOT_switch = False, spellingCorrection = False):
         ''' Complex query.
         Arguments:
           NOT_switch -- Used to switch the order of the two posting lists `postings` and `postings2` in the NOT query, since this operator is not commutative.
+          spellingCorrection -- if `True` the spelling correction is performed
         '''
         if words:
-            postings = self._index[normalize(words[0])]
-            postings2 = self._index[normalize(words[1])]
+            norm_word_0 = normalize(words[0])
+            norm_word_1 = normalize(words[1])
+            if not spellingCorrection:
+                postings = self._index[norm_word_0]
+                postings2 = self._index[norm_word_1]
+            else:
+                postings = self.spelling_correction([norm_word_0])[0]
+                postings2 = self.spelling_correction([norm_word_1])[0]
         elif word:
-            postings2 = self._index[normalize(word)]
+            norm_word = normalize(word)
+            if not spellingCorrection:
+                postings2 = self._index[norm_word]
+            else:
+                postings2 = self.spelling_correction([norm_word])[0]
 
         if op == 'AND':
             plist = postings.intersection(postings2)
@@ -485,7 +496,7 @@ class IRsystem:
             plist = postings.union(postings2)
             return plist
         elif op == 'NOT':
-            if not NOT_switch:
+            if not NOT_switch: # used to control the order of postings and postings2
                 postings_copy = copy.deepcopy(postings)
                 for i in postings2:
                     if i in postings_copy:
@@ -498,33 +509,36 @@ class IRsystem:
                         postings2_copy._postings.remove(i)
                 return postings2_copy
 
-"""### Queries"""
+"""## Queries"""
 
-def and_query(ir: IRsystem, text: str, noprint=True):
+def print_result(answer: PostingList, spellingCorrection=False):
+    if spellingCorrection: # for a better output
+        print()
+    for movie in answer:
+        print(movie)
+
+def and_query(ir: IRsystem, text: str, spellingCorrection=False, noprint=True):
     words = text.split()
-    answer = ir.answer_and_query(words)  # list of documents
+    answer = ir.answer_and_query(words, spellingCorrection)  # list of documents
     if not noprint:
-        for movie in answer:
-            print(movie)
+        print_result(answer, spellingCorrection)
     return answer
         
-def or_query(ir: IRsystem, text: str, noprint=True):
+def or_query(ir: IRsystem, text: str, spellingCorrection=False, noprint=True):
     words = text.split()
-    answer = ir.answer_or_query(words)
+    answer = ir.answer_or_query(words, spellingCorrection)
     if not noprint:
-        for movie in answer:
-            print(movie)
+        print_result(answer, spellingCorrection)
     return answer
 
-def not_query(ir: IRsystem, text: str, noprint=True):
+def not_query(ir: IRsystem, text: str, spellingCorrection=False, noprint=True):
     words = text.split()
-    answer = ir.answer_not_query(words)
+    answer = ir.answer_not_query(words, spellingCorrection)
     if not noprint:
-        for movie in answer:
-            print(movie)
+        print_result(answer, spellingCorrection)
     return answer
 
-def query(ir: IRsystem, text: str, noprint=True):
+def query(ir: IRsystem, text: str, spellingCorrection=False, noprint=True):
     """ This query can answer complex queries with 'AND', 'OR' and 'NOT' but without parentheses.
     E.g. text = "yoda AND darth OR Gandalf NOT love"
     """
@@ -535,16 +549,15 @@ def query(ir: IRsystem, text: str, noprint=True):
     for i, w in enumerate(words):
         if w in ['AND', 'OR', 'NOT']:
             if i == 1:
-                plist = ir.answer_query(op = w, words = [words[i-1], words[i+1]])
+                plist = ir.answer_query(op = w, words = [words[i-1], words[i+1]], spellingCorrection=spellingCorrection)
             else:
-                plist = ir.answer_query(op = w, word = words[i+1], postings = plist)
+                plist = ir.answer_query(op = w, word = words[i+1], postings = plist, spellingCorrection=spellingCorrection)
     answer = ir.get_from_corpus(plist)
     if not noprint:
-        for movie in answer:
-            print(movie)
+        print_result(answer, spellingCorrection)
     return answer
 
-def query_with_pars(ir: IRsystem, text: str, noprint=True):
+def query_with_pars(ir: IRsystem, text: str, spellingCorrection=False, noprint=True):
     """ This query can answer to any type of query, also complex ones. Use 'AND', 'OR' and 'NOT'
     and parenthesis to specify how to combine the words in the query.
     E.g. text = "(yoda AND darth) OR Gandalf NOT love"
@@ -590,19 +603,19 @@ def query_with_pars(ir: IRsystem, text: str, noprint=True):
                     item2 = words_mod[(o+1) + i+1]
                     # Checks to call `ir.answer_query` in the right way
                     if type(item1) == str and type(item2) == str:
-                        plist = ir.answer_query(op = w, words = [item1, item2])
+                        plist = ir.answer_query(op = w, words = [item1, item2], spellingCorrection=spellingCorrection)
                     elif type(item1) == PostingList and type(item2) == str:
-                        plist = ir.answer_query(op = w, word = item2, postings = item1)
+                        plist = ir.answer_query(op = w, word = item2, postings = item1, spellingCorrection=spellingCorrection)
                     elif type(item1) == str and type(item2) == PostingList:
-                        plist = ir.answer_query(op = w, word = item1, postings = item2, NOT_switch = True)
+                        plist = ir.answer_query(op = w, word = item1, postings = item2, NOT_switch = True, spellingCorrection = spellingCorrection)
                     elif type(item1) == PostingList and type(item2) == PostingList:
-                        plist = ir.answer_query(op = w, postings = item1, postings2 = item2)
+                        plist = ir.answer_query(op = w, postings = item1, postings2 = item2, spellingCorrection=spellingCorrection)
                 else:
                     item2 = words_mod[(o+1) + i+1]
                     if type(item2) == str:
-                        plist = ir.answer_query(op = w, word = item2, postings = plist)
+                        plist = ir.answer_query(op = w, word = item2, postings = plist, spellingCorrection=spellingCorrection)
                     elif type(item2) == PostingList:
-                        plist = ir.answer_query(op = w, postings = plist, postings2 = item2)
+                        plist = ir.answer_query(op = w, postings = plist, postings2 = item2, spellingCorrection=spellingCorrection)
         words_mod[o] = plist
         del words_mod[o+1:c+1]
         openp = []
@@ -613,29 +626,16 @@ def query_with_pars(ir: IRsystem, text: str, noprint=True):
     
     answer = ir.get_from_corpus(plist)
     if not noprint:
-        for movie in answer:
-            print(movie)
+        print_result(answer, spellingCorrection)
     return answer
 
-"""### Queries with spelling correction"""
+"""## Phrase queries
 
-def and_query_sc(ir: IRsystem, text: str, noprint=True):
-    words = text.split()
-    answer = ir.answer_and_query(words, spellingCorrection=True)
-    if not noprint:
-        for movie in answer:
-            print(movie)
-    return answer
+## Wildcard queries
 
-def or_query_sc(ir: IRsystem, text: str, noprint=True):
-    words = text.split()
-    answer = ir.answer_or_query(words, spellingCorrection=True)
-    if not noprint:
-        for movie in answer:
-            print(movie)
-    return answer
+A subtree of a tree T is a tree S consisting of a node in T and all of its descendants in T.
 
-"""## Test queries
+## Test queries
 
 ### Initialization
 """
@@ -712,9 +712,9 @@ yld_and_set = yoda_set.intersection(luke_set).intersection(darth_set)
 
 assert set(yld_and_query) == yld_and_set
 
-"""### AND queries with spelling correction"""
+"""#### With spelling correction"""
 
-mispelled_and_query = and_query_sc(ir, "yioda lukke darhth", noprint=False)
+mispelled_and_query = and_query(ir, "yioda lukke darhth", spellingCorrection=True, noprint=False)
 
 assert yld_and_query == mispelled_and_query
 
@@ -738,9 +738,9 @@ fyl_or_set = set(frodo_query + yoda_query + love_query)
 
 assert set(fyl_or_query) == fyl_or_set
 
-"""### OR queries with spelling correction"""
+"""#### With spelling correction"""
 
-mispelled_or_query = or_query_sc(ir, "frodoo yioda ganalf", noprint=False)
+mispelled_or_query = or_query(ir, "frodoo yioda ganalf", spellingCorrection=True, noprint=False)
 
 assert fyg_or_query == mispelled_or_query
 
@@ -771,6 +771,12 @@ yg_set = yoda_set.union(gandalf_set)
 yg_not_set = corpus_set.difference(yg_set)
 
 assert set(yg_not_query) == yg_not_set
+
+"""#### With spelling correction"""
+
+mispelled_a_not_query = not_query(ir, "aq", spellingCorrection=True, noprint=True)
+
+assert a_not_query == mispelled_a_not_query
 
 """### Compex queries"""
 
@@ -856,8 +862,21 @@ aAf_set = am_set.intersection(set(ir.get_from_corpus(ir._index[normalize("fine")
 i_set = set(ir.get_from_corpus(ir._index[normalize("I")]))
 how_set = set(ir.get_from_corpus(ir._index[normalize("how")]))
 hApaOypOiApaAfpOi_set = how_set.intersection(aOy_set).union(i_set).intersection(aAf_set).union(i_set)
-sOh_set = set(ir.get_from_corpus(ir._index[normalize("sleepy")])).union(set(ir.get_from_corpus(ir._index[normalize("hungry")])))
-hApaOypOiApaAfpOiAaApsOhpAc_set = hApaOypOiApaAfpOi_set.intersection(am_set).intersection(sOh_set).intersection(set(and_query(ir, "cold")))
+sleepy_set = set(ir.get_from_corpus(ir._index[normalize("sleepy")]))
+hungry_set = set(ir.get_from_corpus(ir._index[normalize("hungry")]))
+sOh_set = sleepy_set.union(hungry_set)
+cold_set = set(ir.get_from_corpus(ir._index[normalize("cold")]))
+hApaOypOiApaAfpOiAaApsOhpAc_set = hApaOypOiApaAfpOi_set.intersection(am_set).intersection(sOh_set).intersection(cold_set)
 hOphApaOypOiApaAfpOiAaApsOhpAcp_set = hello_set.union(hApaOypOiApaAfpOiAaApsOhpAc_set)
 
 assert set(hOphApaOypOiApaAfpOiAaApsOhpAcp_query) == hOphApaOypOiApaAfpOiAaApsOhpAcp_set
+
+"""#### With spelling correction"""
+
+mispelled_yNdOg_query = query(ir, "yioda NOT ddarth OR Ganalf", spellingCorrection=True, noprint=False)
+
+assert yNdOg_query == mispelled_yNdOg_query
+
+mispelled_yOpgApdOlpNmpOphNap_complex_query = query_with_pars(ir, "yioda OR (Ganalf AND (ddarth OR lovve) NOT motther) OR (helloo NOT aq)", spellingCorrection=True, noprint=False)
+
+assert yOpgApdOlpNmpOphNap_complex_query == mispelled_yOpgApdOlpNmpOphNap_complex_query
