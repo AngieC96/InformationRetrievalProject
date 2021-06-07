@@ -38,7 +38,10 @@ class Posting:
             self._positions = [pos]
         else:
             self._positions = None # sometimes I don't need the list of positions (e.g. in the plist of all the DocID)
-        
+
+    def add(self, pos: int):
+        self._positions.append(pos)
+    
     def get_from_corpus(self, corpus):  # return from the corpus the doc corresponding to that docID. In the list you only save the docID, not the all document
         """ Returns the document corresponding to that docID from the corpus.
         """
@@ -57,7 +60,7 @@ class Posting:
         """
         return self._docID > other._docID
     
-    def __repr__(self) -> str:       # for debagging purposes to print the class
+    def __repr__(self) -> str:
         """ String representation of the class.
         """
         return str(self._docID) + ", pos:" + str(self._positions)
@@ -88,7 +91,7 @@ class PostingList:
         return plist
     
     @classmethod
-    def from_posting_list(cls, postingList: 'PostingList') -> 'PostingList':
+    def from_posting_list(cls, postingList: list) -> 'PostingList':
         """ A posting list can also be constructed by using another posting list.
         """
         plist = cls()
@@ -116,13 +119,11 @@ class PostingList:
         of this one and the one passed as argument.
         """
         intersection = []
-        i = 0
-        j = 0
+        i = 0; j = 0
         while (i < len(self._postings) and j < len(other._postings)):  # until we reach the end of a posting list
             if (self._postings[i] == other._postings[j]):
                 intersection.append(self._postings[i])
-                i += 1
-                j += 1
+                i += 1;  j += 1
             elif (self._postings[i] < other._postings[j]):
                 i += 1
             else:
@@ -134,13 +135,11 @@ class PostingList:
         one and the one passed as argument.
         """
         union = []
-        i = 0
-        j = 0
+        i = 0; j = 0
         while (i < len(self._postings) and j < len(other._postings)):
             if (self._postings[i] == other._postings[j]):
                 union.append(self._postings[i])
-                i += 1
-                j += 1
+                i += 1;  j += 1
             elif (self._postings[i] < other._postings[j]):
                 union.append(self._postings[i])   # because i is the smallest one
                 i += 1
@@ -152,6 +151,34 @@ class PostingList:
         for k in range(j, len(other._postings)):
             union.append(other._postings[k])
         return PostingList.from_posting_list(union)
+
+    def positional_search(self, other: 'PostingList', step: int):
+        """ Returns a new posting list resulting from the intersection
+        of this one and the one passed as argument.
+        """
+        match = []
+        i = j = 0
+        while (i < len(self._postings) and j < len(other._postings)):  # until we reach the end of a posting list
+            if (self._postings[i] == other._postings[j]):
+                n = m = u = 0
+                while (n < len(self._postings[i]._positions) and m < len(other._postings[j]._positions)):
+                    if (self._postings[i]._positions[n] + step == other._postings[j]._positions[m]):
+                        if u == 0:
+                            match.append(Posting(self._postings[i]._docID, self._postings[i]._positions[n]))
+                            u = 1
+                        else:
+                            match[-1].add(self._postings[i]._positions[n])
+                        n += 1;  m += 1
+                    elif (self._postings[i]._positions[n] < other._postings[j]._positions[m]):
+                        n += 1
+                    else:
+                        m += 1
+                i += 1;  j += 1
+            elif (self._postings[i] < other._postings[j]):
+                i += 1
+            else:
+                j += 1
+        return PostingList.from_posting_list(match)
     
     def get_from_corpus(self, corpus):   # used when we have a posting list that is the result of a query, but I don't want the docID, I want the docs!
         return list(map(lambda x: x.get_from_corpus(corpus), self._postings))  # I return a list of documents
@@ -252,18 +279,6 @@ def update_progress(progress):
 
 So an `InvertedIndex` object contains a dictionary `_dictionary` with as keys the words themselves and as values the `Term` associated to each word, which, we recall, contains the `PostingList` associated to the word.\
 It also stores a list with all the Postings, `complete_plist`, used to answer the NOT queries.
-
-
-#### Phrase queries
-
-Answering a phrase query with positional indexing
-
-One way to answer a phrase query is to add, for each posting, the set of positions in which the term appear in the document.
-
-We need to check if the two terms appear in adjacent positions
-
-We perform something like the intersection only that now we have to go inside and check the position.
-We need to check if the two terms appear in adjacent positions → We search if they are contained in the same document and if they are one after the other.
 """
 
 from typing import List
@@ -528,6 +543,22 @@ class IRsystem:
                         postings2_copy._postings.remove(i)
                 return postings2_copy
 
+    def answer_phrase_query(self, text: str, spellingCorrection = False):
+        """ Phrase-query, if `spellingCorrection` is `True` with spelling correction
+        """
+        words = text.split()
+        norm_words = map(normalize, words)  # Normalize all the words. IMPORTANT!!! If the user uses upper-case we will not have ANY match! We have to perform the same normalization of the docs in the corpus on the query!
+        if not spellingCorrection:
+            postings = map(lambda w: self._index[w], norm_words) # get the posting list for each word → list of posting lists
+        else:
+            postings = self.spelling_correction(norm_words)
+        # Reduce
+        it = iter(postings)
+        plist = next(it)
+        for element in it:
+            plist = plist.positional_search(element, 1)
+        return self.get_from_corpus(plist)
+
 """## Queries"""
 
 def print_result(answer: PostingList, spellingCorrection=False):
@@ -650,7 +681,23 @@ def query_with_pars(ir: IRsystem, text: str, spellingCorrection=False, noprint=T
 
 """## Phrase queries
 
-## Wildcard queries
+Answering a phrase query with positional indexing
+
+One way to answer a phrase query is to add, for each posting, the set of positions in which the term appear in the document.
+
+We need to check if the two terms appear in adjacent positions
+
+We perform something like the intersection only that now we have to go inside and check the position.
+We need to check if the two terms appear in adjacent positions → We search if they are contained in the same document and if they are one after the other.
+"""
+
+def phrase_query(ir: IRsystem, text: str, spellingCorrection=False, noprint=True):
+    answer = ir.answer_phrase_query(text, spellingCorrection)
+    if not noprint:
+        print_result(answer, spellingCorrection)
+    return answer
+
+"""## Wildcard queries
 
 A subtree of a tree T is a tree S consisting of a node in T and all of its descendants in T.
 """
@@ -930,23 +977,22 @@ assert yOpgApdOlpNmpOphNap_complex_query == mispelled_yOpgApdOlpNmpOphNap_comple
 
 """### Phrase queries"""
 
-print(type(ir._index._dictionary[3907].posting_list[0]))
-print(     ir._index._dictionary[3907].posting_list[0]._docID)
-print(     ir._index._dictionary[3907].posting_list[0]._positions)
+gb_phrase_query = phrase_query(ir, "Great Britain", noprint=False)
 
-type(ir._index.complete_plist), len(ir._index.complete_plist), ir._index.complete_plist[0]._positions
+pos = [138, 381, 423]
+print(corpus[780].title)
+corpus[780].description
 
-w = 4785 # "a": 3907
-term = ir._index._dictionary[w].term
-print(term)
-for i in range(len(ir._index._dictionary[w].posting_list)):
-    print(i, end = " ")
-    text = ir._index._dictionary[w].posting_list[i].get_from_corpus(corpus)
-    positions = []
-    for pos, token in enumerate(tokenize(text)):
-        if token == term:
-            positions.append(pos)
+tokens = tokenize(corpus[780])
+for p in pos:
+    print(tokens[p], tokens[p+1])
 
-    assert ir._index._dictionary[w].posting_list[i]._positions == positions
+ny_phrase_query = phrase_query(ir, "New York", noprint=False)
 
-print(ir._index._dictionary[2])
+usa_phrase_query = phrase_query(ir, "is an instructor", noprint=False) # NOT WORKING
+
+"""#### With spelling correction"""
+
+mispelled_gb_phrase_query = phrase_query(ir, "Greatt Britin", spellingCorrection=True, noprint=False)
+
+assert gb_phrase_query == mispelled_gb_phrase_query
