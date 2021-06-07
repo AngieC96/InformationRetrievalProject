@@ -24,34 +24,43 @@ A `Posting` object is simply the docID of a document. It has a method `get_from_
 
 @total_ordering   # takes a class where we have defined at least the methods `eq` and `gt`/`lt` and defines in a consistent way all the other methods (otherwise we should implement them all by hand)
 class Posting:
+
+    _docID: int
+    _positions: list
     
-    def __init__(self, docID):
+    def __init__(self, docID: int, pos: list = None):
         """ Class constructor.
+        _docID     -- ID of the document in which the term is contained
+        _positions -- list of the positions in the document in which the term is present
         """
         self._docID = docID
+        if pos != None:
+            self._positions = [pos]
+        else:
+            self._positions = None # sometimes I don't need the list of positions (e.g. in the plist of all the DocID)
         
     def get_from_corpus(self, corpus):  # return from the corpus the doc corresponding to that docID. In the list you only save the docID, not the all document
         """ Returns the document corresponding to that docID from the corpus.
         """
         return corpus[self._docID]
     
-    def __eq__(self, other: 'Posting'):  # euqality comparator
+    def __eq__(self, other: 'Posting') -> bool:  # euqality comparator
         """ Performs the comparison between this posting and another one.
         Since the ordering of the postings is only given by their docID,
         they are equal when their docIDs are equal.
         """
         return self._docID == other._docID
     
-    def __gt__(self, other: 'Posting'):  # greather than comparator
+    def __gt__(self, other: 'Posting') -> bool:  # greather than comparator
         """ As in the case of __eq__, the ordering of postings is given
         by the ordering of their docIDs.
         """
         return self._docID > other._docID
     
-    def __repr__(self):       # for debagging purposes to print the class
+    def __repr__(self) -> str:       # for debagging purposes to print the class
         """ String representation of the class.
         """
-        return str(self._docID)
+        return str(self._docID) + ", pos:" + str(self._positions)
 
 """## Posting Lists
 
@@ -68,15 +77,18 @@ class PostingList:
         self._postings = []    # it has as an attribute a list of posting
         
     @classmethod     # to define another constructor. It will return another PostingList like a constructor
-    def from_docID(cls, docID):
+    def from_docID(cls, docID, pos = None) -> 'PostingList':
         """ A posting list can be constructed starting from a single docID.
         """
         plist = cls()
-        plist._postings = [(Posting(docID))]
+        if pos != None:
+            plist._postings = [Posting(docID, pos)]
+        else:
+            plist._postings = [Posting(docID)]
         return plist
     
     @classmethod
-    def from_posting_list(cls, postingList):
+    def from_posting_list(cls, postingList: 'PostingList') -> 'PostingList':
         """ A posting list can also be constructed by using another posting list.
         """
         plist = cls()
@@ -92,8 +104,10 @@ class PostingList:
         discarded.
         """
         i = 0
-        last = self._postings[-1]   # the self element of the current postinglist
-        while (i < len(other._postings) and last == other._postings[i]):  # we can have the same docID multiple times and when e merge them we don't want them multiple times
+        last = self._postings[-1]   # the last element of the current postinglist
+        while (i < len(other._postings) and last == other._postings[i]):  # we can have the same docID multiple times (the term is present multiple times in the document) and when we merge them we don't want it multiple times
+            if last._positions:
+                last._positions.extend(other._postings[i]._positions)
             i += 1
         self._postings += other._postings[i:]
         
@@ -138,11 +152,6 @@ class PostingList:
         for k in range(j, len(other._postings)):
             union.append(other._postings[k])
         return PostingList.from_posting_list(union)
-
-    def difference(self, other: 'PostingList'):
-      difference = []
-
-      return PostingList.from_posting_list(difference)
     
     def get_from_corpus(self, corpus):   # used when we have a posting list that is the result of a query, but I don't want the docID, I want the docs!
         return list(map(lambda x: x.get_from_corpus(corpus), self._postings))  # I return a list of documents
@@ -154,7 +163,7 @@ class PostingList:
         return len(self._postings)
     
     def __repr__(self):
-        return ", ".join(map(str, self._postings))
+        return "\n".join(map(str, self._postings))
 
 """## Terms
 
@@ -169,9 +178,9 @@ class Term:
 
     posting_list: PostingList
     
-    def __init__(self, term, docID):   # we create a term with a DocID, we sort them and we merge the equal terms
+    def __init__(self, term, docID, pos):   # we create a term with a DocID, we sort them and we merge the equal terms
         self.term = term
-        self.posting_list = PostingList.from_docID(docID)
+        self.posting_list = PostingList.from_docID(docID, pos)
         
     def merge(self, other: 'Term'):   # when we merge two terms
         """ Merges (destructively) this term and the corresponding posting list
@@ -204,7 +213,7 @@ def normalize(text):
     downcase = no_punctuation.lower()  # put everything to lower case
     return downcase
 
-def tokenize(movie: 'MovieDescription'):
+def tokenize(movie: 'MovieDescription') -> list:
     """ Returns a list, which is a posting list, from a movie
     description of all tokens present in the description.
     """
@@ -248,16 +257,13 @@ It also stores a list with all the Postings, `complete_plist`, used to answer th
 #### Phrase queries
 
 Answering a phrase query with positional indexing
-We perform something like the intersection only that now we have to go inside and check the
-position.
-We need to check if the two terms appear in adjacent positions → We search if they are contained
-in the same document and if they are one after the other.
 
-#### Data structure
+One way to answer a phrase query is to add, for each posting, the set of positions in which the term appear in the document.
 
-Python dictionaries aren’t always what you need: the most important case is where you want to store a very large mapping. When a Python dictionary is accessed, the whole dictionary has to be unpickled and brought into memory.
+We need to check if the two terms appear in adjacent positions
 
-BTrees are a balanced tree data structure that behave like a binary tree but distribute keys throughout a number of tree nodes and each node has between $a$ and $b$ children. The nodes are stored in sorted order. Nodes are then only unpickled and brought into memory as they’re accessed, so the entire tree doesn’t have to occupy memory (unless you really are touching every single key).
+We perform something like the intersection only that now we have to go inside and check the position.
+We need to check if the two terms appear in adjacent positions → We search if they are contained in the same document and if they are one after the other.
 """
 
 from typing import List
@@ -268,41 +274,54 @@ class InvertedIndex:
     complete_plist: PostingList
     
     def __init__(self):
+        ''' Empty class constructor.
+
+        _dictionary    -- the collection of all terms that we have in the inverted index
+        complete_plist -- PostingList containing all the documents of the corpus
+        '''
         self._dictionary = []
-        self.complete_plist = PostingList() # PostingList of all the documents
+        self.complete_plist = PostingList()
         
-    @classmethod  # instead of having this method associated to a specific instance/object of the class InvertedIndex we write InvertedIndex.from_corpus(). Because you can have only one __init__ method, so you use @classmethod to have multiple constructors. It's like a static method in Java
+    @classmethod  # to have multiple constructors. It's like a static method in Java: you call InvertedIndex.from_corpus()
     def from_corpus(cls, corpus: list):
-        # Here we "cheat" by using python dictionaries
-        intermediate_dict = {}   # we cheat a little bit and use a Python dictionary → we should create a big list, sort it and merge everything
+        ''' Class constructor processing a corpus. This is the constructor that creates the index from scatch given a corpus of documents.
+        '''
+        # Here we "cheat" by using python dictionaries (we should create a big list, sort it and merge everything)
+        intermediate_dict = {}
         print("Processing the corpus to create the index...")
-        for docID, document in enumerate(corpus): # NB: corpus: collection (list) of objects of type MovieDescription
+        for docID, document in enumerate(corpus): # NB: corpus → collection (list) of objects of type MovieDescription
+            # Update complete_plist
             if docID == 0:
-                plist = PostingList.from_docID(docID)
+                compl_plist = PostingList.from_docID(docID)
             else:
-                plist.merge(PostingList.from_docID(docID)) # I update the PostingList of all the docs
+                compl_plist.merge(PostingList.from_docID(docID))
+            # Update _dictionary
             tokens = tokenize(document) # document is a MovieDescription object
-            for token in tokens:
-                term = Term(token, docID)
+            for pos, token in enumerate(tokens):
+                term = Term(token, docID, pos)
                 try:
                     intermediate_dict[token].merge(term)  # I merge the two posting lists → Term.merge() which calls PostingList.merge()
                 except KeyError:
-                    intermediate_dict[token] = term # for when the term is not present in the dict
+                    intermediate_dict[token] = term  # when the term is not present in the dictionary
             # To observe the progressing of our indexing
             update_progress(docID/len(corpus))
         
-        idx = cls()  # we call the constructor of the class = InvertedIndex
+        idx = cls()  # we call the constructor of the class InvertedIndex
         idx._dictionary = sorted(intermediate_dict.values())  # list of all the sorted terms
-        idx.complete_plist = plist
+        idx.complete_plist = compl_plist
         return idx
     
-    def __getitem__(self, key): # indexing the inverted index using as keys the terms
+    def __getitem__(self, key):
+        ''' Index the inverted index using as keys the Terms.
+        '''
         for term in self._dictionary:  # we could do a binary search
             if term.term == key:
                 return term.posting_list  # quering the index with a  word returns the PostingList associated to that word
         raise KeyError(f"The term '{key}' is not present in the index.") # the key is not present!
         
     def __repr__(self):
+        ''' Representation of the index.
+        '''
         return "A dictionary with " + str(len(self._dictionary)) + " terms"
 
 """## Reading the Corpus
@@ -634,8 +653,36 @@ def query_with_pars(ir: IRsystem, text: str, spellingCorrection=False, noprint=T
 ## Wildcard queries
 
 A subtree of a tree T is a tree S consisting of a node in T and all of its descendants in T.
+"""
 
-## Test queries
+def starts_with(word, start):
+    n = len(start)
+    if word[:n] == start:
+        return True
+    else:
+        return False
+        
+        
+        
+print(starts_with("cat", "ca"))
+print(starts_with("catzzeggio", "cat"))
+print(starts_with("cameratismo", "cat"))
+
+txt = "Hello World"[::-1]
+print(txt)
+
+print()
+txt = "Hello World$"
+
+def rotations(txt):
+    for i in range(len(txt)):
+        first = txt[0:i]
+        second = txt[i:]
+        print(second + first)
+        
+rotations(txt)
+
+"""## Test queries
 
 ### Initialization
 """
@@ -880,3 +927,26 @@ assert yNdOg_query == mispelled_yNdOg_query
 mispelled_yOpgApdOlpNmpOphNap_complex_query = query_with_pars(ir, "yioda OR (Ganalf AND (ddarth OR lovve) NOT motther) OR (helloo NOT aq)", spellingCorrection=True, noprint=False)
 
 assert yOpgApdOlpNmpOphNap_complex_query == mispelled_yOpgApdOlpNmpOphNap_complex_query
+
+"""### Phrase queries"""
+
+print(type(ir._index._dictionary[3907].posting_list[0]))
+print(     ir._index._dictionary[3907].posting_list[0]._docID)
+print(     ir._index._dictionary[3907].posting_list[0]._positions)
+
+type(ir._index.complete_plist), len(ir._index.complete_plist), ir._index.complete_plist[0]._positions
+
+w = 4785 # "a": 3907
+term = ir._index._dictionary[w].term
+print(term)
+for i in range(len(ir._index._dictionary[w].posting_list)):
+    print(i, end = " ")
+    text = ir._index._dictionary[w].posting_list[i].get_from_corpus(corpus)
+    positions = []
+    for pos, token in enumerate(tokenize(text)):
+        if token == term:
+            positions.append(pos)
+
+    assert ir._index._dictionary[w].posting_list[i]._positions == positions
+
+print(ir._index._dictionary[2])
