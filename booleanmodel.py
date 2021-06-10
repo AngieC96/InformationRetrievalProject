@@ -553,11 +553,11 @@ class IRsystem:
         else:
             postings = self.spelling_correction(norm_words)
         # Reduce
-        it = iter(postings)
-        plist = next(it)
-        for element in it:
-            plist = plist.positional_search(element, 1)
-        return self.get_from_corpus(plist)
+        it = enumerate(iter(postings))
+        i, plist = next(it)
+        for i, element in it:
+            plist = plist.positional_search(element, i)
+        return plist, self.get_from_corpus(plist)
 
 """## Queries"""
 
@@ -692,10 +692,10 @@ We need to check if the two terms appear in adjacent positions → We search if 
 """
 
 def phrase_query(ir: IRsystem, text: str, spellingCorrection=False, noprint=True):
-    answer = ir.answer_phrase_query(text, spellingCorrection)
+    posting_list, answer = ir.answer_phrase_query(text, spellingCorrection)
     if not noprint:
         print_result(answer, spellingCorrection)
-    return answer
+    return posting_list, answer
 
 """## Wildcard queries
 
@@ -840,16 +840,16 @@ assert fyg_or_query == mispelled_or_query
 
 """### NOT queries"""
 
-a_not_query = not_query(ir, "a", noprint=True)
+#a_not_query = not_query(ir, "a", noprint=True)
 
 corpus_set = set(corpus)
 a_query = ir.get_from_corpus(ir._index[normalize("a")])
 a_set = set(a_query)
 a_not_set = corpus_set.difference(a_set)
 
-assert set(a_not_query) == a_not_set
+#assert set(a_not_query) == a_not_set
 
-lm_not_query = not_query(ir, "love mother", noprint=True)
+#lm_not_query = not_query(ir, "love mother", noprint=True)
 
 love_set = set(love_query)
 mother_query = ir.get_from_corpus(ir._index[normalize("mother")])
@@ -857,20 +857,20 @@ mother_set = set(mother_query)
 lm_set = love_set.union(mother_set)
 lm_not_set = corpus_set.difference(lm_set)
 
-assert set(lm_not_query) == lm_not_set
+#assert set(lm_not_query) == lm_not_set
 
-yg_not_query = not_query(ir, "yoda Gandalf", noprint=True)
+#yg_not_query = not_query(ir, "yoda Gandalf", noprint=True)
 
 yg_set = yoda_set.union(gandalf_set)
 yg_not_set = corpus_set.difference(yg_set)
 
-assert set(yg_not_query) == yg_not_set
+#assert set(yg_not_query) == yg_not_set
 
 """#### With spelling correction"""
 
-mispelled_a_not_query = not_query(ir, "aq", spellingCorrection=True, noprint=True)
+#mispelled_a_not_query = not_query(ir, "aq", spellingCorrection=True, noprint=True)
 
-assert a_not_query == mispelled_a_not_query
+#assert a_not_query == mispelled_a_not_query
 
 """### Compex queries"""
 
@@ -977,19 +977,44 @@ assert yOpgApdOlpNmpOphNap_complex_query == mispelled_yOpgApdOlpNmpOphNap_comple
 
 """### Phrase queries"""
 
-gb_phrase_query = phrase_query(ir, "Great Britain", noprint=False)
+gb_posting_list, gb_phrase_query = phrase_query(ir, "Great Britain", noprint=False)
+
+type(gb_posting_list[1]), gb_posting_list[1]
+
+gb_posting_list[1]._docID, gb_posting_list[1]._positions
 
 pos = [138, 381, 423]
 print(corpus[780].title)
 corpus[780].description
 
-tokens = tokenize(corpus[780])
+text = "Great Britain"
+text = normalize(text)
+words = list(text.split())
+words
+
+for posting in gb_posting_list:
+    l = len(words)
+    doc = posting._docID
+    pos = posting._positions
+    tokens = tokenize(corpus[doc])
+    for p in pos:
+        assert tokens[p:p+l] == words
+
+ny_posting_list, ny_phrase_query = phrase_query(ir, "New York", noprint=False)
+
+oft_posting_list, oft_phrase_query = phrase_query(ir, "one of the", noprint=False) # NOT WORKING
+
+c = 36331
+corpus[c].description
+
+pos = [71, 82, 116, 173, 298]
+tokens = tokenize(corpus[c])
 for p in pos:
-    print(tokens[p], tokens[p+1])
+    print(tokens[p], tokens[p+1], tokens[p+2])
 
-ny_phrase_query = phrase_query(ir, "New York", noprint=False)
+len(oft_phrase_query)
 
-usa_phrase_query = phrase_query(ir, "is an instructor", noprint=False) # NOT WORKING
+usa_posting_list, usa_phrase_query = phrase_query(ir, "United States of America", noprint=False) # NOT WORKING
 
 """#### With spelling correction"""
 
