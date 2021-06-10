@@ -30,8 +30,9 @@ class Posting:
     
     def __init__(self, docID: int, pos: list = None):
         """ Class constructor.
-        _docID     -- ID of the document in which the term is contained
-        _positions -- list of the positions in the document in which the term is present
+        Fields:
+          _docID     -- ID of the document in which the term is contained
+          _positions -- list of the positions in the document in which the term is present
         """
         self._docID = docID
         if pos != None:
@@ -236,8 +237,7 @@ class Term:
 
 def normalize(text):
     """ A simple funzion to normalize a text.
-    It removes everything that is not a word, a space or an hyphen
-    and downcases all the text.
+    It removes everything that is not a word, a space or an hyphen and downcases all the text.
     """
     no_punctuation = re.sub(r'[^\w^\s^-]', '', text)  # the text that matches a certain pattern will be substittuted with the second expression. ^\w → not something alphanumeric, ^\s → not some space, ^- → not a dash, replace it with '', the empty string
     downcase = no_punctuation.lower()  # put everything to lower case
@@ -293,9 +293,9 @@ class InvertedIndex:
     
     def __init__(self):
         ''' Empty class constructor.
-
-        _dictionary    -- the collection of all terms that we have in the inverted index
-        complete_plist -- PostingList containing all the documents of the corpus
+        Fields:
+          _dictionary    -- the collection of all terms that we have in the inverted index
+          complete_plist -- PostingList containing all the documents of the corpus
         '''
         self._dictionary = []
         self.complete_plist = PostingList()
@@ -470,7 +470,8 @@ class IRsystem:
 
     def answer_and_query(self, words: List[str], spellingCorrection = False):
         """ AND-query
-        spellingCorrection -- if `True` a spelling correction is performed
+        Arguments:
+          spellingCorrection -- if `True` a spelling correction is performed
         """
         norm_words = map(normalize, words)  # Normalize all the words. IMPORTANT!!! If the user uses upper-case we will not have ANY match! We have to perform the same normalization of the docs in the corpus on the query!
         if not spellingCorrection:
@@ -482,7 +483,8 @@ class IRsystem:
 
     def answer_or_query(self, words: List[str], spellingCorrection = False):
         """ OR-query
-        spellingCorrection -- if `True` a spelling correction is performed
+        Arguments:
+          spellingCorrection -- if `True` a spelling correction is performed
         """
         norm_words = map(normalize, words)
         if not spellingCorrection:
@@ -494,7 +496,8 @@ class IRsystem:
 
     def answer_not_query(self, words: List[str], spellingCorrection = False):
         """ NOT-query (if `words` is longer than 1, the words are connected using an AND and then the NOT is performed)
-        spellingCorrection -- if `True` a spelling correction is performed
+        Arguments:
+          spellingCorrection -- if `True` a spelling correction is performed
         """
         norm_words = map(normalize, words)
         if not spellingCorrection:
@@ -552,7 +555,8 @@ class IRsystem:
 
     def answer_phrase_query(self, words: List[str], spellingCorrection = False):
         """ Phrase-query
-        spellingCorrection -- if `True` a spelling correction is performed
+        Arguments:
+          spellingCorrection -- if `True` a spelling correction is performed
         """
         norm_words = map(normalize, words)  # Normalize all the words. IMPORTANT!!! If the user uses upper-case we will not have ANY match! We have to perform the same normalization of the docs in the corpus on the query!
         if not spellingCorrection:
@@ -569,7 +573,8 @@ class IRsystem:
 
     def answer_phrase_query_ksteps(self, term1: str, term2: str, k: int, spellingCorrection = False):
         """ Phrase-query of the form 'term1 /k term2'
-        spellingCorrection -- if `True` a spelling correction is performed
+        Arguments:
+          spellingCorrection -- if `True` a spelling correction is performed
         """
         norm_term1 = normalize(term1)
         norm_term2 = normalize(term2)
@@ -580,12 +585,9 @@ class IRsystem:
             postings1 = self.spelling_correction(norm_term1)
             postings2 = self.spelling_correction(norm_term2)
         plist = []
-        for i in range(1, k+2): # k+1 because I have to count also the last word, and +1 again because otherwise range is [1,k+1) and I need [1, k+1]
-            print(i)
+        for i in range(1, k+2): # k+1 because I have to count also the last word, and +1 again because otherwise 'range' is [1,k+1) and I need [1, k+1]
             plist.append(postings1.positional_search(postings2, i))
-            print(f"plist: {plist[-1]}")
         plist = reduce(lambda x, y: x.union(y), plist)
-        print(plist)
         return plist, self.get_from_corpus(plist)
 
 """## Queries"""
@@ -737,21 +739,14 @@ def phrase_query_ksteps(ir: IRsystem, text: str, spellingCorrection=False, nopri
         k = int(words[1][1:])
     else:
         print("ERROR: for now you can only use a query of the form: 'term1 /k term2' with k an integer.")
-    print(k)
     posting_list, answer = ir.answer_phrase_query_ksteps(words[0], words[2], k, spellingCorrection)
     if not noprint:
         print_result(answer, spellingCorrection)
     return posting_list, answer
 
-text = 'term1 /k term2'
-words = text.split()
-words
-
-words[1][0]
-
 """## Wildcard queries
 
-A subtree of a tree T is a tree S consisting of a node in T and all of its descendants in T.
+Ho anche una domanda per quanto riguarda l'implementazione. A lezione abbiamo visto, per le wildcard queries, che se si usano gli alberi binari una trailing wildcard "ca*" consiste nel un sottoalbero del termine "ca", purtroppo però non sono riuscita a trovare una libreria di Python per gli alberi bilanciati (ho guardato anche per BTrees) che autobilanci l'albero da sola ma che mi faccia anche accedere ai nodi per poter selezionare il sottoalbero che mi interessa. Stavo dunque pensando di continuare ad usare un Python dictionary per l'indice e creare una lista di tutti i termini che iniziano con la wildcard "ca", cercarli nel dizionario e poi unirli. Come implementazione delle wildcard queries andrebbe bene lo stesso?
 """
 
 def starts_with(word, start):
@@ -892,16 +887,16 @@ assert fyg_or_query == mispelled_or_query
 
 """### NOT queries"""
 
-#a_not_query = not_query(ir, "a", noprint=True)
+a_not_query = not_query(ir, "a", noprint=True)
 
 corpus_set = set(corpus)
 a_query = ir.get_from_corpus(ir._index[normalize("a")])
 a_set = set(a_query)
 a_not_set = corpus_set.difference(a_set)
 
-#assert set(a_not_query) == a_not_set
+assert set(a_not_query) == a_not_set
 
-#lm_not_query = not_query(ir, "love mother", noprint=True)
+lm_not_query = not_query(ir, "love mother", noprint=True)
 
 love_set = set(love_query)
 mother_query = ir.get_from_corpus(ir._index[normalize("mother")])
@@ -909,20 +904,20 @@ mother_set = set(mother_query)
 lm_set = love_set.union(mother_set)
 lm_not_set = corpus_set.difference(lm_set)
 
-#assert set(lm_not_query) == lm_not_set
+assert set(lm_not_query) == lm_not_set
 
-#yg_not_query = not_query(ir, "yoda Gandalf", noprint=True)
+yg_not_query = not_query(ir, "yoda Gandalf", noprint=True)
 
 yg_set = yoda_set.union(gandalf_set)
 yg_not_set = corpus_set.difference(yg_set)
 
-#assert set(yg_not_query) == yg_not_set
+assert set(yg_not_query) == yg_not_set
 
 """#### With spelling correction"""
 
-#mispelled_a_not_query = not_query(ir, "aq", spellingCorrection=True, noprint=True)
+mispelled_a_not_query = not_query(ir, "aq", spellingCorrection=True, noprint=True)
 
-#assert a_not_query == mispelled_a_not_query
+assert a_not_query == mispelled_a_not_query
 
 """### Compex queries"""
 
@@ -1071,25 +1066,18 @@ assert gb_phrase_query == mispelled_gb_phrase_query
 text = "United /2 America"
 ua_posting_list, ua_phrase_query = phrase_query_ksteps(ir, text, noprint=False)
 
-len(ua_posting_list), len(usa_posting_list)
+"""Since fortunately there are nor "United America" nor "United States America" in the corpus, we can check that the result of this query is equal to the one of "United States of America".
 
-type(ua_posting_list), type(usa_posting_list)
-
-for i in range(26):
-  print(ua_posting_list[i], "\t\t", usa_posting_list[i])
-
-ua_posting_list == usa_posting_list
-
-import difflib
-print('\n'.join(difflib.ndiff(ua_posting_list._postings, usa_posting_list._postings)))
-
-repr(ua_posting_list) == repr(usa_posting_list)
+We have to use the function `ascii` ([documentation](https://docs.python.org/3/library/functions.html#ascii)) because `==` finds them different.
+"""
 
 ascii(ua_posting_list) == ascii(usa_posting_list)
-
-ua_posting_list == usa_posting_list
 
 text = "New /1 city"
 nc_posting_list, nc_phrase_query = phrase_query_ksteps(ir, text, noprint=False)
 
-ascii(nc_posting_list) == ascii(ny_posting_list)
+"""In this case we find some results also for "New city" so we cannot compare it with the result of the query "New York city".
+
+### Wildcard queries
+"""
+
