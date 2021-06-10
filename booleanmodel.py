@@ -59,6 +59,9 @@ class Posting:
         by the ordering of their docIDs.
         """
         return self._docID > other._docID
+
+    def __hash__(self):
+        return hash(repr(self))
     
     def __repr__(self) -> str:
         """ String representation of the class.
@@ -152,7 +155,7 @@ class PostingList:
             union.append(other._postings[k])
         return PostingList.from_posting_list(union)
 
-    def positional_search(self, other: 'PostingList', step: int):
+    def positional_search(self, other: 'PostingList', step: int = 1):
         """ Returns a new posting list resulting from the intersection
         of this one and the one passed as argument.
         """
@@ -451,6 +454,8 @@ class IRsystem:
         return plist.get_from_corpus(self._corpus)
 
     def spelling_correction(self, norm_words: List[str]):
+        ''' Performs a spelling correction of the normalized words finding the nearest words.
+        '''
         postings = []
         for w in norm_words:
             try:
@@ -464,7 +469,8 @@ class IRsystem:
         return postings
 
     def answer_and_query(self, words: List[str], spellingCorrection = False):
-        """ AND-query, if `spellingCorrection` is `True` with spelling correction
+        """ AND-query
+        spellingCorrection -- if `True` a spelling correction is performed
         """
         norm_words = map(normalize, words)  # Normalize all the words. IMPORTANT!!! If the user uses upper-case we will not have ANY match! We have to perform the same normalization of the docs in the corpus on the query!
         if not spellingCorrection:
@@ -475,7 +481,8 @@ class IRsystem:
         return self.get_from_corpus(plist)
 
     def answer_or_query(self, words: List[str], spellingCorrection = False):
-        """ OR-query, if `spellingCorrection` is `True` with spelling correction
+        """ OR-query
+        spellingCorrection -- if `True` a spelling correction is performed
         """
         norm_words = map(normalize, words)
         if not spellingCorrection:
@@ -487,7 +494,7 @@ class IRsystem:
 
     def answer_not_query(self, words: List[str], spellingCorrection = False):
         """ NOT-query (if `words` is longer than 1, the words are connected using an AND and then the NOT is performed)
-        If `spellingCorrection` is `True` with spelling correction
+        spellingCorrection -- if `True` a spelling correction is performed
         """
         norm_words = map(normalize, words)
         if not spellingCorrection:
@@ -505,7 +512,7 @@ class IRsystem:
         ''' Complex query.
         Arguments:
           NOT_switch -- Used to switch the order of the two posting lists `postings` and `postings2` in the NOT query, since this operator is not commutative.
-          spellingCorrection -- if `True` the spelling correction is performed
+          spellingCorrection -- if `True` a spelling correction is performed
         '''
         if words:
             norm_word_0 = normalize(words[0])
@@ -543,10 +550,10 @@ class IRsystem:
                         postings2_copy._postings.remove(i)
                 return postings2_copy
 
-    def answer_phrase_query(self, text: str, spellingCorrection = False):
-        """ Phrase-query, if `spellingCorrection` is `True` with spelling correction
+    def answer_phrase_query(self, words: List[str], spellingCorrection = False):
+        """ Phrase-query
+        spellingCorrection -- if `True` a spelling correction is performed
         """
-        words = text.split()
         norm_words = map(normalize, words)  # Normalize all the words. IMPORTANT!!! If the user uses upper-case we will not have ANY match! We have to perform the same normalization of the docs in the corpus on the query!
         if not spellingCorrection:
             postings = map(lambda w: self._index[w], norm_words) # get the posting list for each word → list of posting lists
@@ -556,7 +563,29 @@ class IRsystem:
         it = enumerate(iter(postings))
         i, plist = next(it)
         for i, element in it:
+            # i is the step 
             plist = plist.positional_search(element, i)
+        return plist, self.get_from_corpus(plist)
+
+    def answer_phrase_query_ksteps(self, term1: str, term2: str, k: int, spellingCorrection = False):
+        """ Phrase-query of the form 'term1 /k term2'
+        spellingCorrection -- if `True` a spelling correction is performed
+        """
+        norm_term1 = normalize(term1)
+        norm_term2 = normalize(term2)
+        if not spellingCorrection:
+            postings1 = self._index[norm_term1]
+            postings2 = self._index[norm_term2]
+        else:
+            postings1 = self.spelling_correction(norm_term1)
+            postings2 = self.spelling_correction(norm_term2)
+        plist = []
+        for i in range(1, k+2): # k+1 because I have to count also the last word, and +1 again because otherwise range is [1,k+1) and I need [1, k+1]
+            print(i)
+            plist.append(postings1.positional_search(postings2, i))
+            print(f"plist: {plist[-1]}")
+        plist = reduce(lambda x, y: x.union(y), plist)
+        print(plist)
         return plist, self.get_from_corpus(plist)
 
 """## Queries"""
@@ -589,7 +618,7 @@ def not_query(ir: IRsystem, text: str, spellingCorrection=False, noprint=True):
     return answer
 
 def query(ir: IRsystem, text: str, spellingCorrection=False, noprint=True):
-    """ This query can answer complex queries with 'AND', 'OR' and 'NOT' but without parentheses.
+    """ This function can answer complex queries with 'AND', 'OR' and 'NOT' but without parentheses.
     E.g. text = "yoda AND darth OR Gandalf NOT love"
     """
     words = text.split()
@@ -608,7 +637,7 @@ def query(ir: IRsystem, text: str, spellingCorrection=False, noprint=True):
     return answer
 
 def query_with_pars(ir: IRsystem, text: str, spellingCorrection=False, noprint=True):
-    """ This query can answer to any type of query, also complex ones. Use 'AND', 'OR' and 'NOT'
+    """ This function can answer to any type of query, also complex ones. Use 'AND', 'OR' and 'NOT'
     and parenthesis to specify how to combine the words in the query.
     E.g. text = "(yoda AND darth) OR Gandalf NOT love"
     """
@@ -681,21 +710,44 @@ def query_with_pars(ir: IRsystem, text: str, spellingCorrection=False, noprint=T
 
 """## Phrase queries
 
-Answering a phrase query with positional indexing
+### Answering a phrase query with positional indexing
 
-One way to answer a phrase query is to add, for each posting, the set of positions in which the term appear in the document.
+One way to answer a phrase query is to add, for each posting, the set of positions in which the term appear in the document. We perform something like the intersection only that now we have to go inside and check if the two terms appear in adjacent positions. So we search if they are contained in the same document and if they are one after the other.
 
-We need to check if the two terms appear in adjacent positions
-
-We perform something like the intersection only that now we have to go inside and check the position.
-We need to check if the two terms appear in adjacent positions → We search if they are contained in the same document and if they are one after the other.
+Besides, the positional index can be used to support the operators of the form "$\texttt{term}_1 /k \texttt{ term}_2$" with $k$ an integer indicating the maximum number of words that can be between $\texttt{term}_1$ and $\texttt{term}_2$.
 """
 
 def phrase_query(ir: IRsystem, text: str, spellingCorrection=False, noprint=True):
-    posting_list, answer = ir.answer_phrase_query(text, spellingCorrection)
+    ''' This function can answer to a phrase query of any length.
+    '''
+    words = text.split()
+    posting_list, answer = ir.answer_phrase_query(words, spellingCorrection)
     if not noprint:
         print_result(answer, spellingCorrection)
     return posting_list, answer
+
+def phrase_query_ksteps(ir: IRsystem, text: str, spellingCorrection=False, noprint=True):
+    ''' This function can answer a phrase query of the form 'term1 /k term2'  with k an integer
+    indicating the maximum number of words that can be between term1 and term2.
+    '''
+    words = text.split()
+    if len(words) != 3:
+        print("ERROR: for now you can only use a query of the form: 'term1 /k term2' with k an integer.")
+    if words[1][0] == '/':
+        k = int(words[1][1:])
+    else:
+        print("ERROR: for now you can only use a query of the form: 'term1 /k term2' with k an integer.")
+    print(k)
+    posting_list, answer = ir.answer_phrase_query_ksteps(words[0], words[2], k, spellingCorrection)
+    if not noprint:
+        print_result(answer, spellingCorrection)
+    return posting_list, answer
+
+text = 'term1 /k term2'
+words = text.split()
+words
+
+words[1][0]
 
 """## Wildcard queries
 
@@ -840,16 +892,16 @@ assert fyg_or_query == mispelled_or_query
 
 """### NOT queries"""
 
-a_not_query = not_query(ir, "a", noprint=True)
+#a_not_query = not_query(ir, "a", noprint=True)
 
 corpus_set = set(corpus)
 a_query = ir.get_from_corpus(ir._index[normalize("a")])
 a_set = set(a_query)
 a_not_set = corpus_set.difference(a_set)
 
-assert set(a_not_query) == a_not_set
+#assert set(a_not_query) == a_not_set
 
-lm_not_query = not_query(ir, "love mother", noprint=True)
+#lm_not_query = not_query(ir, "love mother", noprint=True)
 
 love_set = set(love_query)
 mother_query = ir.get_from_corpus(ir._index[normalize("mother")])
@@ -857,20 +909,20 @@ mother_set = set(mother_query)
 lm_set = love_set.union(mother_set)
 lm_not_set = corpus_set.difference(lm_set)
 
-assert set(lm_not_query) == lm_not_set
+#assert set(lm_not_query) == lm_not_set
 
-yg_not_query = not_query(ir, "yoda Gandalf", noprint=True)
+#yg_not_query = not_query(ir, "yoda Gandalf", noprint=True)
 
 yg_set = yoda_set.union(gandalf_set)
 yg_not_set = corpus_set.difference(yg_set)
 
-assert set(yg_not_query) == yg_not_set
+#assert set(yg_not_query) == yg_not_set
 
 """#### With spelling correction"""
 
-mispelled_a_not_query = not_query(ir, "aq", spellingCorrection=True, noprint=True)
+#mispelled_a_not_query = not_query(ir, "aq", spellingCorrection=True, noprint=True)
 
-assert a_not_query == mispelled_a_not_query
+#assert a_not_query == mispelled_a_not_query
 
 """### Compex queries"""
 
@@ -993,7 +1045,7 @@ def check_phrase_query(text, posting_list):
 
 check_phrase_query(text, gb_posting_list)
 
-text = "New York"
+text = "New York city"
 ny_posting_list, ny_phrase_query = phrase_query(ir, text, noprint=True)
 
 check_phrase_query(text, ny_posting_list)
@@ -1013,3 +1065,31 @@ check_phrase_query(text, usa_posting_list)
 mispelled_gb_posting_list, mispelled_gb_phrase_query = phrase_query(ir, "Greatt Britin", spellingCorrection=True, noprint=False)
 
 assert gb_phrase_query == mispelled_gb_phrase_query
+
+"""#### With $k$ steps"""
+
+text = "United /2 America"
+ua_posting_list, ua_phrase_query = phrase_query_ksteps(ir, text, noprint=False)
+
+len(ua_posting_list), len(usa_posting_list)
+
+type(ua_posting_list), type(usa_posting_list)
+
+for i in range(26):
+  print(ua_posting_list[i], "\t\t", usa_posting_list[i])
+
+ua_posting_list == usa_posting_list
+
+import difflib
+print('\n'.join(difflib.ndiff(ua_posting_list._postings, usa_posting_list._postings)))
+
+repr(ua_posting_list) == repr(usa_posting_list)
+
+ascii(ua_posting_list) == ascii(usa_posting_list)
+
+ua_posting_list == usa_posting_list
+
+text = "New /1 city"
+nc_posting_list, nc_phrase_query = phrase_query_ksteps(ir, text, noprint=False)
+
+ascii(nc_posting_list) == ascii(ny_posting_list)
