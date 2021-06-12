@@ -594,19 +594,9 @@ class IRsystem:
         plist = []
         for w in self._index._dictionary:
             if starts_with(w.term, wildcard):
-                print(w.term)
                 plist.append(w.posting_list)
         plist = reduce(lambda x, y: x.union(y), plist)
         return self.get_from_corpus(plist)
-
-j=0
-for i in ir._index._dictionary:
-    if j < 10:
-        print(type(i.term))
-        print(type(i.posting_list))
-        print(type(ir._index[i.term]))
-        print(i.posting_list==ir._index[i.term])
-    j += 1
 
 def starts_with(word, start):
     n = len(start)
@@ -787,14 +777,6 @@ def trailing_wildcard(ir: IRsystem, text: str, noprint=True):
     if not noprint:
         print_result(answer)
     return answer
-
-text = "abandon*"
-wildcard = text.split('*')[0]
-wildcard
-
-print(starts_with("cat", "ca"))
-print(starts_with("catzzeggio", "cat"))
-print(starts_with("cameratismo", "cat"))
 
 txt = "Hello World"[::-1]
 print(txt)
@@ -1130,13 +1112,13 @@ def check_wildcards_queries(wildcard):
     answer = ir.get_from_corpus(plist)
     return answer
 
-abandon_wildcard_query = trailing_wildcard(ir, "abandon*", noprint=True)
+abandon_wildcard_query = trailing_wildcard(ir, "abandon*", noprint=False)
 
 abandon_answer = check_wildcards_queries("abandon")
 
 assert abandon_wildcard_query == abandon_answer
 
-passeng_wildcard_query = trailing_wildcard(ir, "passeng*", noprint=True)
+passeng_wildcard_query = trailing_wildcard(ir, "passeng*", noprint=False)
 
 passeng_answer = check_wildcards_queries("passeng")
 
