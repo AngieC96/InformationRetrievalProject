@@ -594,7 +594,7 @@ class IRsystem:
         plist = []
         for w in self._index._dictionary:
             if starts_with(w.term, wildcard):
-                print(w.term, wildcard)
+                print(w.term)
                 plist.append(w.posting_list)
         plist = reduce(lambda x, y: x.union(y), plist)
         return self.get_from_corpus(plist)
@@ -1115,30 +1115,29 @@ nc_posting_list, nc_phrase_query = phrase_query_ksteps(ir, text, noprint=False)
 ### Wildcard queries
 """
 
+def check_wildcards_queries(wildcard):
+    i = 0
+    while not starts_with(ir._index._dictionary[i].term, wildcard):
+        passeng = i
+        i += 1
+    plist = []
+    while starts_with(ir._index._dictionary[i].term, wildcard):
+        print(ir._index._dictionary[i].term)
+        plist.append(ir._index._dictionary[i].posting_list)
+        i += 1
+
+    plist = reduce(lambda x, y: x.union(y), plist)
+    answer = ir.get_from_corpus(plist)
+    return answer
+
 abandon_wildcard_query = trailing_wildcard(ir, "abandon*", noprint=True)
 
-abandon = i = 4184
-plist = []
-while starts_with(ir._index._dictionary[i].term, "abandon"):
-    print(ir._index._dictionary[i].term)
-    plist.append(ir._index._dictionary[i].posting_list)
-    i += 1
-
-plist = reduce(lambda x, y: x.union(y), plist)
-abandon_answer = ir.get_from_corpus(plist)
+abandon_answer = check_wildcards_queries("abandon")
 
 assert abandon_wildcard_query == abandon_answer
 
 passeng_wildcard_query = trailing_wildcard(ir, "passeng*", noprint=True)
 
-passeng = i = 128420
-plist = []
-while starts_with(ir._index._dictionary[i].term, "passeng"):
-    print(ir._index._dictionary[i].term)
-    plist.append(ir._index._dictionary[i].posting_list)
-    i += 1
-
-plist = reduce(lambda x, y: x.union(y), plist)
-passeng_answer = ir.get_from_corpus(plist)
+passeng_answer = check_wildcards_queries("passeng")
 
 assert passeng_wildcard_query == passeng_answer
