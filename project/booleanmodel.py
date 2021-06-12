@@ -1117,7 +1117,6 @@ nc_posting_list, nc_phrase_query = phrase_query_ksteps(ir, text, noprint=False)
 
 abandon_wildcard_query = trailing_wildcard(ir, "abandon*", noprint=True)
 
-ir._index["abandon"]
 abandon = i = 4184
 plist = []
 while starts_with(ir._index._dictionary[i].term, "abandon"):
@@ -1126,6 +1125,20 @@ while starts_with(ir._index._dictionary[i].term, "abandon"):
     i += 1
 
 plist = reduce(lambda x, y: x.union(y), plist)
-answer = ir.get_from_corpus(plist)
+abandon_answer = ir.get_from_corpus(plist)
 
-assert abandon_wildcard_query == answer
+assert abandon_wildcard_query == abandon_answer
+
+passeng_wildcard_query = trailing_wildcard(ir, "passeng*", noprint=True)
+
+passeng = i = 128420
+plist = []
+while starts_with(ir._index._dictionary[i].term, "passeng"):
+    print(ir._index._dictionary[i].term)
+    plist.append(ir._index._dictionary[i].posting_list)
+    i += 1
+
+plist = reduce(lambda x, y: x.union(y), plist)
+passeng_answer = ir.get_from_corpus(plist)
+
+assert passeng_wildcard_query == passeng_answer
