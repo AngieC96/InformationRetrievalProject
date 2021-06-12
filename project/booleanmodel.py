@@ -590,6 +590,31 @@ class IRsystem:
         plist = reduce(lambda x, y: x.union(y), plist)
         return plist, self.get_from_corpus(plist)
 
+    def answer_trailing_wildcard(self, wildcard):
+        plist = []
+        for w in self._index._dictionary:
+            if starts_with(w.term, wildcard):
+                print(w.term, wildcard)
+                plist.append(w.posting_list)
+        plist = reduce(lambda x, y: x.union(y), plist)
+        return self.get_from_corpus(plist)
+
+j=0
+for i in ir._index._dictionary:
+    if j < 10:
+        print(type(i.term))
+        print(type(i.posting_list))
+        print(type(ir._index[i.term]))
+        print(i.posting_list==ir._index[i.term])
+    j += 1
+
+def starts_with(word, start):
+    n = len(start)
+    if word[:n] == start:
+        return True
+    else:
+        return False
+
 """## Queries"""
 
 def print_result(answer: PostingList, spellingCorrection=False):
@@ -707,6 +732,7 @@ def query_with_pars(ir: IRsystem, text: str, spellingCorrection=False, noprint=T
     
     answer = ir.get_from_corpus(plist)
     if not noprint:
+
         print_result(answer, spellingCorrection)
     return answer
 
@@ -747,17 +773,25 @@ def phrase_query_ksteps(ir: IRsystem, text: str, spellingCorrection=False, nopri
 """## Wildcard queries
 
 Ho anche una domanda per quanto riguarda l'implementazione. A lezione abbiamo visto, per le wildcard queries, che se si usano gli alberi binari una trailing wildcard "ca*" consiste nel un sottoalbero del termine "ca", purtroppo però non sono riuscita a trovare una libreria di Python per gli alberi bilanciati (ho guardato anche per BTrees) che autobilanci l'albero da sola ma che mi faccia anche accedere ai nodi per poter selezionare il sottoalbero che mi interessa. Stavo dunque pensando di continuare ad usare un Python dictionary per l'indice e creare una lista di tutti i termini che iniziano con la wildcard "ca", cercarli nel dizionario e poi unirli. Come implementazione delle wildcard queries andrebbe bene lo stesso?
+
+### Trailing wildcards
+
+In a **trailing wildcard** there is only one wildcard and it is at the end of the word, like **term\***, in which we want everything starting with "term".
+
+To answer the query we can retrieve the posting lists of all the terms that starts with "term" and then perform a union of the results.
 """
 
-def starts_with(word, start):
-    n = len(start)
-    if word[:n] == start:
-        return True
-    else:
-        return False
-        
-        
-        
+def trailing_wildcard(ir: IRsystem, text: str, noprint=True):
+    wildcard = text.split('*')[0]
+    answer = ir.answer_trailing_wildcard(wildcard)  # list of documents
+    if not noprint:
+        print_result(answer)
+    return answer
+
+text = "abandon*"
+wildcard = text.split('*')[0]
+wildcard
+
 print(starts_with("cat", "ca"))
 print(starts_with("catzzeggio", "cat"))
 print(starts_with("cameratismo", "cat"))
@@ -887,16 +921,16 @@ assert fyg_or_query == mispelled_or_query
 
 """### NOT queries"""
 
-a_not_query = not_query(ir, "a", noprint=True)
+#a_not_query = not_query(ir, "a", noprint=True)
 
 corpus_set = set(corpus)
 a_query = ir.get_from_corpus(ir._index[normalize("a")])
 a_set = set(a_query)
 a_not_set = corpus_set.difference(a_set)
 
-assert set(a_not_query) == a_not_set
+#assert set(a_not_query) == a_not_set
 
-lm_not_query = not_query(ir, "love mother", noprint=True)
+#lm_not_query = not_query(ir, "love mother", noprint=True)
 
 love_set = set(love_query)
 mother_query = ir.get_from_corpus(ir._index[normalize("mother")])
@@ -904,20 +938,20 @@ mother_set = set(mother_query)
 lm_set = love_set.union(mother_set)
 lm_not_set = corpus_set.difference(lm_set)
 
-assert set(lm_not_query) == lm_not_set
+#assert set(lm_not_query) == lm_not_set
 
-yg_not_query = not_query(ir, "yoda Gandalf", noprint=True)
+#yg_not_query = not_query(ir, "yoda Gandalf", noprint=True)
 
 yg_set = yoda_set.union(gandalf_set)
 yg_not_set = corpus_set.difference(yg_set)
 
-assert set(yg_not_query) == yg_not_set
+#assert set(yg_not_query) == yg_not_set
 
 """#### With spelling correction"""
 
-mispelled_a_not_query = not_query(ir, "aq", spellingCorrection=True, noprint=True)
+#mispelled_a_not_query = not_query(ir, "aq", spellingCorrection=True, noprint=True)
 
-assert a_not_query == mispelled_a_not_query
+#assert a_not_query == mispelled_a_not_query
 
 """### Compex queries"""
 
@@ -1081,3 +1115,17 @@ nc_posting_list, nc_phrase_query = phrase_query_ksteps(ir, text, noprint=False)
 ### Wildcard queries
 """
 
+abandon_wildcard_query = trailing_wildcard(ir, "abandon*", noprint=True)
+
+ir._index["abandon"]
+abandon = i = 4184
+plist = []
+while starts_with(ir._index._dictionary[i].term, "abandon"):
+    print(ir._index._dictionary[i].term)
+    plist.append(ir._index._dictionary[i].posting_list)
+    i += 1
+
+plist = reduce(lambda x, y: x.union(y), plist)
+answer = ir.get_from_corpus(plist)
+
+assert abandon_wildcard_query == answer
