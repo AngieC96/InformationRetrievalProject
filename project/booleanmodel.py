@@ -284,11 +284,15 @@ So an `InvertedIndex` object contains a dictionary `_dictionary` with as keys th
 It also stores a list with all the Postings, `complete_plist`, used to answer the NOT queries.
 """
 
+def backwards(x):
+  return x[::-1]
+
 from typing import List
 
 class InvertedIndex:
 
     _dictionary: List
+    _reverse_dictionary: List
     complete_plist: PostingList
     
     def __init__(self):
@@ -298,6 +302,7 @@ class InvertedIndex:
           complete_plist -- PostingList containing all the documents of the corpus
         '''
         self._dictionary = []
+        self._reverse_dictionary = []
         self.complete_plist = PostingList()
         
     @classmethod  # to have multiple constructors. It's like a static method in Java: you call InvertedIndex.from_corpus()
@@ -326,13 +331,14 @@ class InvertedIndex:
         
         idx = cls()  # we call the constructor of the class InvertedIndex
         idx._dictionary = sorted(intermediate_dict.values())  # list of all the sorted terms
+        idx._reverse_dictionary = sorted(intermediate_dict.values(), key=lambda x: backwards(x.term))
         idx.complete_plist = compl_plist
         return idx
     
     def __getitem__(self, key):
         ''' Index the inverted index using as keys the Terms.
         '''
-        for term in self._dictionary:  # we could do a binary search
+        for term in self._dictionary:  # TODO: binary search
             if term.term == key:
                 return term.posting_list  # quering the index with a  word returns the PostingList associated to that word
         raise KeyError(f"The term '{key}' is not present in the index.") # the key is not present!
@@ -341,6 +347,19 @@ class InvertedIndex:
         ''' Representation of the index.
         '''
         return "A dictionary with " + str(len(self._dictionary)) + " terms"
+
+x = Term("cat", 3, 4)
+y = Term("dog", 5 , 8)
+z = Term("house", 8 , 3)
+intermediate_dict = {}
+intermediate_dict["cat"] = x
+intermediate_dict["dog"] = y
+intermediate_dict["house"] = z
+print(intermediate_dict)
+
+print(x.term[::-1])
+
+sorted(intermediate_dict.values(), key=lambda x: backwards(x.term))
 
 """## Reading the Corpus
 
@@ -598,6 +617,14 @@ class IRsystem:
         plist = reduce(lambda x, y: x.union(y), plist)
         return self.get_from_corpus(plist)
 
+    def answer_leading_wildcard(self, wildcard):
+        plist = []
+        for w in self._index._reverse_dictionary:
+            if ends_with(w.term, wildcard):
+                plist.append(w.posting_list)
+        plist = reduce(lambda x, y: x.union(y), plist)
+        return self.get_from_corpus(plist)
+
 def starts_with(word, start):
     n = len(start)
     if word[:n] == start:
@@ -766,7 +793,7 @@ Ho anche una domanda per quanto riguarda l'implementazione. A lezione abbiamo vi
 
 ### Trailing wildcards
 
-In a **trailing wildcard** there is only one wildcard and it is at the end of the word, like **term\***, in which we want everything starting with "term".
+In a **trailing wildcard** there is only one wildcard and it is at the end of the word, like **"term\*"**, in which we want everything starting with "term".
 
 To answer the query we can retrieve the posting lists of all the terms that starts with "term" and then perform a union of the results.
 """
@@ -778,10 +805,62 @@ def trailing_wildcard(ir: IRsystem, text: str, noprint=True):
         print_result(answer)
     return answer
 
+"""### Leading wildcard
+
+In a **leading wildcard** there is only one wildcard and it is at the beginning of the word, like **"*term"**, in which we want everything ending with "term". We can build an additional dictionary in the index which has in alphabetical order the reverse of the words. Then the "leading wildcard" is like an "inverse wildcard" for the reverse dictiornary.
+"""
+
+def leading_wildcard(ir: IRsystem, text: str, noprint=True):
+    wildcard = text.split('*')[1]
+    answer = ir.answer_leading_wildcard(wildcard)  # list of documents
+    if not noprint:
+        print_result(answer)
+    return answer
+
+"""Both `list.sort()` and `sorted()` have a `key` parameter to specify a function (or other callable) to be called on each list element prior to making comparisons [see [link](https://docs.python.org/3/howto/sorting.html)]."""
+
+def ends_with(word, end):
+    n = len(end)
+    if word[-n:] == end:
+        return True
+    else:
+        return False
+
+print(ends_with("cat", "t"))
+print(ends_with("cart", "rt"))
+print(ends_with("abandoned", "ned"))
+
 txt = "Hello World"[::-1]
 print(txt)
 
-print()
+words = ["drone", "carbon", "dog", "box", "cart", "cat", "bart"]
+
+print(sorted(words))
+print(sorted(words, key=backwards))
+i=4
+while i < len(words) and ends_with(words[i], "t"):
+        print(words[i])
+        i += 1
+
+"""### General wildcard queries
+
+Using the “permuterm index” we can reformulate the problem of “one wildcard” as a leading or
+trailing wildcard problem, and we can also extend the solution to queries with more than one
+wildcard. We insertion a special “end of word” symbol, \$, and we insert all the rotations of the
+word (including the “end of word”) in the dictionary. All the rotations of the same word points to
+the same postings list of the initial word.
+Managing general wildcard queries. Given a query (like C*T), we put the “end of word” at the
+end of the query and we rotate the word to have the wildcard at the end. Thus we can have a
+trailing wildcard, that we know how to solve!
+Managing multiple wildcard queries. Given a query (like *A*T), we put the “end of word” at the
+end of the query, then we consider the more general query where everything between the first
+and last wildcard is “folded” inside a single wildcard (like *T\$). The solution of the original query
+are a subset of this more general query! Lastly, we rotate to have a trailing wildcard query. We
+collect all the terms matching the simplified query then we scan the list to remove the ones not
+matching the original query (filtering step). This is more expensive than the other cases but
+multiple wildcards are less common.
+"""
+
 txt = "Hello World$"
 
 def rotations(txt):
@@ -1095,12 +1174,13 @@ nc_posting_list, nc_phrase_query = phrase_query_ksteps(ir, text, noprint=False)
 """In this case we find some results also for "New city" so we cannot compare it with the result of the query "New York city".
 
 ### Wildcard queries
+
+#### Trailing wildcards queries
 """
 
-def check_wildcards_queries(wildcard):
+def check_trailing_wildcards_queries(wildcard):
     i = 0
     while not starts_with(ir._index._dictionary[i].term, wildcard):
-        passeng = i
         i += 1
     plist = []
     while starts_with(ir._index._dictionary[i].term, wildcard):
@@ -1114,12 +1194,34 @@ def check_wildcards_queries(wildcard):
 
 abandon_wildcard_query = trailing_wildcard(ir, "abandon*", noprint=False)
 
-abandon_answer = check_wildcards_queries("abandon")
+abandon_answer = check_trailing_wildcards_queries("abandon")
 
 assert abandon_wildcard_query == abandon_answer
 
 passeng_wildcard_query = trailing_wildcard(ir, "passeng*", noprint=False)
 
-passeng_answer = check_wildcards_queries("passeng")
+passeng_answer = check_trailing_wildcards_queries("passeng")
 
 assert passeng_wildcard_query == passeng_answer
+
+"""#### Leading wildcards"""
+
+def check_leading_wildcards_queries(wildcard):
+    i = 0
+    while not ends_with(ir._index._reverse_dictionary[i].term, wildcard):
+        i += 1
+    plist = []
+    while ends_with(ir._index._reverse_dictionary[i].term, wildcard):
+        print(ir._index._reverse_dictionary[i].term)
+        plist.append(ir._index._reverse_dictionary[i].posting_list)
+        i += 1
+
+    plist = reduce(lambda x, y: x.union(y), plist)
+    answer = ir.get_from_corpus(plist)
+    return answer
+
+ssenger_wildcard_query = leading_wildcard(ir, "*ssenger", noprint=False)
+
+ssenger_answer = check_leading_wildcards_queries("ssenger")
+
+assert ssenger_wildcard_query == ssenger_answer
