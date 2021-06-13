@@ -1196,3 +1196,9 @@ ssenger_wildcard_query = leading_wildcard(ir, "*ssenger", noprint=False)
 ssenger_answer = check_leading_wildcards_queries("ssenger")
 
 assert ssenger_wildcard_query == ssenger_answer
+
+esk_wildcard_query = leading_wildcard(ir, "*esk", noprint=False)
+
+esk_answer = check_leading_wildcards_queries("esk")
+
+assert esk_wildcard_query == esk_answer
