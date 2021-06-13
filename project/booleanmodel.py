@@ -284,9 +284,6 @@ So an `InvertedIndex` object contains a dictionary `_dictionary` with as keys th
 It also stores a list with all the Postings, `complete_plist`, used to answer the NOT queries.
 """
 
-def backwards(x):
-  return x[::-1]
-
 from typing import List
 
 class InvertedIndex:
@@ -348,18 +345,10 @@ class InvertedIndex:
         '''
         return "A dictionary with " + str(len(self._dictionary)) + " terms"
 
-x = Term("cat", 3, 4)
-y = Term("dog", 5 , 8)
-z = Term("house", 8 , 3)
-intermediate_dict = {}
-intermediate_dict["cat"] = x
-intermediate_dict["dog"] = y
-intermediate_dict["house"] = z
-print(intermediate_dict)
+"""Both `list.sort()` and `sorted()` have a `key` parameter to specify a function (or other callable) to be called on each list element prior to making comparisons [see [link](https://docs.python.org/3/howto/sorting.html)]."""
 
-print(x.term[::-1])
-
-sorted(intermediate_dict.values(), key=lambda x: backwards(x.term))
+def backwards(x):
+  return x[::-1]
 
 """## Reading the Corpus
 
@@ -632,6 +621,13 @@ def starts_with(word, start):
     else:
         return False
 
+def ends_with(word, end):
+    n = len(end)
+    if word[-n:] == end:
+        return True
+    else:
+        return False
+
 """## Queries"""
 
 def print_result(answer: PostingList, spellingCorrection=False):
@@ -816,31 +812,6 @@ def leading_wildcard(ir: IRsystem, text: str, noprint=True):
     if not noprint:
         print_result(answer)
     return answer
-
-"""Both `list.sort()` and `sorted()` have a `key` parameter to specify a function (or other callable) to be called on each list element prior to making comparisons [see [link](https://docs.python.org/3/howto/sorting.html)]."""
-
-def ends_with(word, end):
-    n = len(end)
-    if word[-n:] == end:
-        return True
-    else:
-        return False
-
-print(ends_with("cat", "t"))
-print(ends_with("cart", "rt"))
-print(ends_with("abandoned", "ned"))
-
-txt = "Hello World"[::-1]
-print(txt)
-
-words = ["drone", "carbon", "dog", "box", "cart", "cat", "bart"]
-
-print(sorted(words))
-print(sorted(words, key=backwards))
-i=4
-while i < len(words) and ends_with(words[i], "t"):
-        print(words[i])
-        i += 1
 
 """### General wildcard queries
 
