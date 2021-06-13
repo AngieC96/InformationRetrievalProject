@@ -207,11 +207,26 @@ class ImpossibleMergeError(Exception):
 @total_ordering  # to have all the ordering methods defined automatically
 class Term:
 
+    term: str
     posting_list: PostingList
     
-    def __init__(self, term, docID, pos):   # we create a term with a DocID, we sort them and we merge the equal terms
-        self.term = term
-        self.posting_list = PostingList.from_docID(docID, pos)
+    def __init__(self):
+        self.term = None
+        self.posting_list = None
+    
+    @classmethod
+    def given_docid(cls, term: str, docID: int, pos: int):   # we create a term with a DocID, we sort them and we merge the equal terms
+        t = cls()
+        t.term = term
+        t.posting_list = PostingList.from_docID(docID, pos)
+        return t
+    
+    @classmethod
+    def given_posting_list(cls, term: str, postinglist: PostingList) -> 'Term':
+        t = cls()
+        t.term = term
+        t.posting_list = postinglist
+        return t
         
     def merge(self, other: 'Term'):   # when we merge two terms
         """ Merges (destructively) this term and the corresponding posting list
@@ -266,7 +281,7 @@ def update_progress(progress):
         progress = float(progress)
     if not isinstance(progress, float):
         progress = 0
-        status = "error: progress var must be float\r\n"
+        status = "error: progress bar must be float\r\n"
     if progress < 0:
         progress = 0
         status = "Halt...\r\n"
@@ -296,6 +311,7 @@ class InvertedIndex:
         ''' Empty class constructor.
         Fields:
           _dictionary    -- the collection of all terms that we have in the inverted index
+          _reverse_dictionary
           complete_plist -- PostingList containing all the documents of the corpus
         '''
         self._dictionary = []
@@ -318,11 +334,17 @@ class InvertedIndex:
             # Update _dictionary
             tokens = tokenize(document) # document is a MovieDescription object
             for pos, token in enumerate(tokens):
-                term = Term(token, docID, pos)
+                term = Term.given_docid(token, docID, pos)
                 try:
                     intermediate_dict[token].merge(term)  # I merge the two posting lists → Term.merge() which calls PostingList.merge()
                 except KeyError:
                     intermediate_dict[token] = term  # when the term is not present in the dictionary
+                    token = token + "$" # insert the special "end of word" symbol
+                    rotations = word_rotations(token)
+                    for r in rotations:
+                        term = Term.given_posting_list(r, term.posting_list) # since python doesn't perform deepcopy this is a reference to "term.posting_list", so a "pointer"
+                        intermediate_dict[r] = term
+
             # To observe the progressing of our indexing
             update_progress(docID/len(corpus))
         
@@ -345,10 +367,42 @@ class InvertedIndex:
         '''
         return "A dictionary with " + str(len(self._dictionary)) + " terms"
 
+term = Term.given_docid("cat", 3, 4)
+a = term
+term.merge(Term.given_docid("cat", 5, 8))
+print(f"a -> {a}")
+
+term2 = Term.given_posting_list("cat$", term.posting_list)
+print(f"term2 -> {term2}")
+
+term.merge(Term.given_docid("cat", 7, 3))
+print(f"term2 -> {term2}")
+
+dic = {}
+dic["cat"] = term
+dic["cat$"] = term2
+print(dic.values())
+
+sorted(dic.values())
+
 """Both `list.sort()` and `sorted()` have a `key` parameter to specify a function (or other callable) to be called on each list element prior to making comparisons [see [link](https://docs.python.org/3/howto/sorting.html)]."""
 
 def backwards(x):
   return x[::-1]
+
+txt = "Hello World"
+txt += "$"
+print(txt)
+
+def word_rotations(txt):
+    rotations = []
+    for i in range(len(txt)):
+        first = txt[0:i]
+        second = txt[i:]
+        rotations.append(second + first)
+    return rotations
+        
+word_rotations(txt)
 
 """## Reading the Corpus
 
@@ -469,7 +523,7 @@ class IRsystem:
             try:
                 res = self._index[w]
             except KeyError:
-                dictionary = [t.term for t in self._index._dictionary]
+                dictionary = [t.term for t in self._index._dictionary if "$" not in t.term] # the if is to remove the terms with inside the "end of word" $
                 sub = find_nearest(w, dictionary, keep_first=True)
                 print("{} not found. Did you mean {}?".format(w, sub))
                 res = self._index[sub]
@@ -796,7 +850,7 @@ To answer the query we can retrieve the posting lists of all the terms that star
 
 def trailing_wildcard(ir: IRsystem, text: str, noprint=True):
     wildcard = text.split('*')[0]
-    answer = ir.answer_trailing_wildcard(wildcard)  # list of documents
+    answer = ir.answer_trailing_wildcard(wildcard)
     if not noprint:
         print_result(answer)
     return answer
@@ -808,7 +862,7 @@ In a **leading wildcard** there is only one wildcard and it is at the beginning 
 
 def leading_wildcard(ir: IRsystem, text: str, noprint=True):
     wildcard = text.split('*')[1]
-    answer = ir.answer_leading_wildcard(wildcard)  # list of documents
+    answer = ir.answer_leading_wildcard(wildcard)
     if not noprint:
         print_result(answer)
     return answer
@@ -820,27 +874,53 @@ trailing wildcard problem, and we can also extend the solution to queries with m
 wildcard. We insertion a special “end of word” symbol, \$, and we insert all the rotations of the
 word (including the “end of word”) in the dictionary. All the rotations of the same word points to
 the same postings list of the initial word.
-Managing general wildcard queries. Given a query (like C*T), we put the “end of word” at the
+
+
+**Managing general wildcard queries.** Given a query (like C\*T), we put the “end of word” at the
 end of the query and we rotate the word to have the wildcard at the end. Thus we can have a
 trailing wildcard, that we know how to solve!
-Managing multiple wildcard queries. Given a query (like *A*T), we put the “end of word” at the
+"""
+
+def general_wildcard(ir: IRsystem, text: str, noprint=True):
+    text += "$"
+    i = 0
+    while (i in range(len(txt))) and text[-1] != "*":
+        first = text[0:i]
+        second = text[i:]
+        text = second + first
+        i += 1
+    wildcard = text.split('*')[0]
+    answer = ir.answer_trailing_wildcard(wildcard)
+    if not noprint:
+        print_result(answer)
+    return answer
+
+text = "pass*er"
+text += "$"
+i = 0
+while (i in range(len(txt))) and text[-1] != "*":
+    first = text[0:i]
+    second = text[i:]
+    text = second + first
+    print(text)
+    i += 1
+
+print("$" in text)
+print("$" in "pass*er")
+
+"""### Multiple wildcard queries
+
+**Managing multiple wildcard queries.** Given a query (like \*A\*T), we put the "end of word" at the
 end of the query, then we consider the more general query where everything between the first
-and last wildcard is “folded” inside a single wildcard (like *T\$). The solution of the original query
+and last wildcard is "folded" inside a single wildcard (like \*T\$). The solution of the original query
 are a subset of this more general query! Lastly, we rotate to have a trailing wildcard query. We
 collect all the terms matching the simplified query then we scan the list to remove the ones not
 matching the original query (filtering step). This is more expensive than the other cases but
 multiple wildcards are less common.
 """
 
-txt = "Hello World$"
-
-def rotations(txt):
-    for i in range(len(txt)):
-        first = txt[0:i]
-        second = txt[i:]
-        print(second + first)
-        
-rotations(txt)
+def multiple_wildcards(ir: IRsystem, text: str, noprint=True):
+    pass
 
 """## Test queries
 
@@ -1202,3 +1282,7 @@ esk_wildcard_query = leading_wildcard(ir, "*esk", noprint=False)
 esk_answer = check_leading_wildcards_queries("esk")
 
 assert esk_wildcard_query == esk_answer
+
+"""#### General wildcard queries"""
+
+pass_er_wildcard_query = general_wildcard(ir, "pass*er", noprint=False)
