@@ -9,7 +9,7 @@ The IR system is able to:
 
   `"hello OR ((how AND (are OR you) OR I AND (am AND fine) OR I) AND am AND (sleepy OR hungry) AND cold)"`.
 
-  - Use the `and_query` function to conect all the words in your query text with ANDs.
+  - Use the `and_query` function to connect all the words in your query text with ANDs.
   - Use the `or_query` function to connect all the words in your query text with ORs.
   - Use the `not_query` function to connect all the words in your query text with NOTs.
   - Use the `query` function to answer a query with AND, OR and NOT without parentheses.
@@ -25,7 +25,7 @@ The IR system is able to:
 
   (for time reasons keeping as correct the first character and searching only among the terms in the index that start with that character, but changing a parameter allows for a search in the entire index)
 
-I evaluated the IR system on a set of test queries for each functionality, checking the results using `assert`s.
+I evaluated the IR system on a set of test queries for each functionality, and in addition I checked that the results of the queries where correct using `assert`s.
 
 I also implemented a way to save and load the entire index from disk, to avoid re-indexing when the program starts. To save the index I used `Pickle`.
 
@@ -33,4 +33,4 @@ I also implemented a way to save and load the entire index from disk, to avoid r
 
 ## Dataset
 
-Dataset that I use: http://www.cs.cmu.edu/~ark/personas/, with more than 42k movie descriptions.
+As dataset I used the "CMU Movie Summary Corpus" dataset, which is a collection of 42,306 movie plot summaries and metadata, available at the following [link](http://www.cs.cmu.edu/~ark/personas).
