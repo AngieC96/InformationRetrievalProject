@@ -19,6 +19,7 @@ import pickle                                  # to save the index
 import time
 import os.path
 import copy
+from typing import List                        # for type hint checking
 
 """## Postings
 
@@ -84,12 +85,12 @@ So a `PostingList` object is a list of `Posting`s. You can construct an empty `P
 
 class PostingList:
 
-    _postings: list
+    _postings: List[Posting]
     
     def __init__(self):
         """ Class constructor.
         """
-        self._postings = []    # list of postings
+        self._postings = []    # list of Postings
         
     @classmethod     # to define another constructor. It will return another PostingList like a constructor
     def from_docID(cls, docID, pos = None) -> 'PostingList':
@@ -215,7 +216,7 @@ A `Term` object contains both the word itself and the `PostingList` with all the
 class ImpossibleMergeError(Exception):
     pass
 
-@total_ordering  # to have all the ordering methods defined automatically
+@total_ordering
 class Term:
 
     term: str
@@ -304,28 +305,29 @@ def update_progress(progress):
     sys.stdout.write(text)
     sys.stdout.flush()
 
-"""In an inverted index we store, for each term, the list of documents containing it.
+"""In an **<font color=#00ADEF>inverted index</font>** we store, for each term, the list of documents containing it.\
+In a **<font color=#00ADEF> positional index</font>** we add, for each posting, the set of positions in which the term appears in the document.\
+In a **<font color=#00ADEF>permuterm index</font>** for each word we insert a special “end of word” symbol, \$, and we insert all the rotations of the word (including the “end of word”) in the dictionary. All the rotations of the same word points to the **same** postings list of the initial word.
 
-So an `Index` object contains a dictionary `_dictionary` with as keys the words themselves and as values the `Term` associated to each word, which, we recall, contains the `PostingList` associated to the word.\
-It also stores a list with all the Postings, `complete_plist`, used to answer the NOT queries.
+So an `Index` object, which implements all these three indexes, contains a list `_dictionary` of `Term`s, which, we recall, contains the `PostingList` associated to the word. It's created from a dictionary with as keys the words themselves and as values the `Term` associated to that word, from which the values are taken and inserted sorted in the variable.\
+It also stores a list with all the Postings, `complete_plist`, used to answer the NOT queries.\
+The variable `_reverse_dictionary` contains the same words of `_dictionary` but ordered alphabetically starting from the end of the word to the beginning; it is used to answer leading wildcards.
 
-Since our index is both an Inverted Index, a Positional Index and a Permuterm index, we also store a `_reverse_dictionary` ==!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!==
+Both `list.sort()` and `sorted()` have a `key` parameter to specify a function (or other callable) to be called on each list element prior to making comparisons [see [link](https://docs.python.org/3/howto/sorting.html)].
 """
-
-from typing import List
 
 class Index:
 
-    _dictionary: List
-    _reverse_dictionary: List
+    _dictionary: List[Term]
+    _reverse_dictionary: List[Term]
     complete_plist: PostingList
     
     def __init__(self):
         ''' Empty class constructor.
         Fields:
-          _dictionary    -- the collection of all terms that we have in the index
-          _reverse_dictionary
-          complete_plist -- PostingList containing all the documents of the corpus
+          _dictionary          -- the collection of all terms that we have in the index
+          _reverse_dictionary  -- the dictionary with in alphabetical order the reverse of the words
+          complete_plist       -- PostingList containing all the documents of the corpus
         '''
         self._dictionary = []
         self._reverse_dictionary = []
@@ -338,14 +340,14 @@ class Index:
         # Here we "cheat" by using python dictionaries (we should create a big list, sort it and merge everything)
         intermediate_dict = {}
         print("Processing the corpus to create the index...")
-        for docID, document in enumerate(corpus): # NB: corpus → collection (list) of objects of type MovieDescription
+        for docID, document in enumerate(corpus): # NB: corpus → list of objects of type MovieDescription
             # Update complete_plist
             if docID == 0:
                 compl_plist = PostingList.from_docID(docID)
             else:
                 compl_plist.merge(PostingList.from_docID(docID))
             # Update _dictionary
-            tokens = tokenize(document) # document is a MovieDescription object
+            tokens = tokenize(document) # `document` is a MovieDescription object
             for pos, token in enumerate(tokens):
                 term = Term.given_docid(token, docID, pos)
                 try:
@@ -353,7 +355,7 @@ class Index:
                 except KeyError:
                     intermediate_dict[token] = term  # when the term is not present in the dictionary
                     token = token + "$" # insert the special "end of word" symbol
-                    rotations = word_rotations(token)
+                    rotations = word_rotations(token) # compute all the possible rotations of the word
                     for r in rotations:
                         term = Term.given_posting_list(r, term.posting_list) # since python doesn't perform deepcopy this is a reference to "term.posting_list", so a "pointer"
                         intermediate_dict[r] = term
@@ -380,32 +382,8 @@ class Index:
         '''
         return "A dictionary with " + str(len(self._dictionary)) + " terms"
 
-term = Term.given_docid("cat", 3, 4)
-a = term
-term.merge(Term.given_docid("cat", 5, 8))
-print(f"a -> {a}")
-
-term2 = Term.given_posting_list("cat$", term.posting_list)
-print(f"term2 -> {term2}")
-
-term.merge(Term.given_docid("cat", 7, 3))
-print(f"term2 -> {term2}")
-
-dic = {}
-dic["cat"] = term
-dic["cat$"] = term2
-print(dic.values())
-
-sorted(dic.values())
-
-"""Both `list.sort()` and `sorted()` have a `key` parameter to specify a function (or other callable) to be called on each list element prior to making comparisons [see [link](https://docs.python.org/3/howto/sorting.html)]."""
-
 def backwards(x):
   return x[::-1]
-
-txt = "Hello World"
-txt += "$"
-print(txt)
 
 def word_rotations(txt):
     rotations = []
@@ -414,8 +392,6 @@ def word_rotations(txt):
         second = txt[i:]
         rotations.append(second + first)
     return rotations
-        
-word_rotations(txt)
 
 """## Reading the Corpus
 
@@ -425,7 +401,9 @@ We have implemented the comparison methods to make `MovieDescription` a sortable
 """
 
 @total_ordering
-class MovieDescription:  # container for all the info we have about the movie
+class MovieDescription:
+    """ Container for the informations we have about a movie.
+    """
     
     def __init__(self, title: str, description: str):
         self.title = title
@@ -444,18 +422,17 @@ class MovieDescription:  # container for all the info we have about the movie
         return self.title  # + "\n" + self.description + "\n"
 
 def read_movie_descriptions():
-    filename = 'data/plot_summaries.txt'   # not very portable but done for the sake of simplicity
+    filename = 'data/plot_summaries.txt'
     movie_names_file = 'data/movie.metadata.tsv'
     with open(movie_names_file, 'r') as csv_file:
-        movie_names = csv.reader(csv_file, delimiter = '\t')   # we define the csv reader
+        movie_names = csv.reader(csv_file, delimiter = '\t')
         names_table = {}   # Python dictionary with all the names of the films: key = movieID, value = movie title
         for name in movie_names:
             names_table[name[0]] = name[2] # the first element is the ID, the third elemnt is the title
-    # Now we have all the associations between ID and title, we miss the move description
-
+    # Now we have all the associations between ID and title, we miss the movie description
     with open(filename, 'r') as csv_file:
         descriptions = csv.reader(csv_file, delimiter = '\t')
-        corpus = []   # collection (list) of objects of type MovieDescription
+        corpus = []   # list of objects of type MovieDescription
         for desc in descriptions:
             try:      # at least in this dataset there are some errors so some descriptions have not a matching ID
                 movie = MovieDescription(names_table[desc[0]], desc[1]) # the first element is the ID, the second the description
@@ -467,7 +444,7 @@ def read_movie_descriptions():
 
 """## Edit distance
 
-By computing the edit distance we can find the set of words that are the closest to a misspelled word. However, computing the edit distance on the entire dictionary can be too expensive. We can use some heuristics to limit the number of words, like looking only at words with the same initial letter (hopefully this has not been misspelled). The latter is what is implemented in this model.
+By computing the **<font color=#00ADEF>edit distance</font>** we can find the set of words that are the closest to a misspelled word. However, computing the edit distance on the entire dictionary can be too expensive. We can use some heuristics to limit the number of words, like looking only at words with the same initial letter (hopefully this has not been misspelled). The latter is what is implemented in this model.
 """
 
 def edit_distance(u, v, print = False):
@@ -508,7 +485,7 @@ def find_nearest(word, dictionary, keep_first=False):
 
 """## IR System
 
-An `IRsystem` object contains the entire corpus and the `Index`.
+An `IRsystem` object contains the entire corpus and the `Index`. It has also various methods to answer to the queries.
 """
 
 class IRsystem:
@@ -521,15 +498,15 @@ class IRsystem:
         self._index = index
         
     @classmethod
-    def from_corpus(cls, corpus: list): # generate the entire index calling the constructor
+    def from_corpus(cls, corpus: list): # generates the entire index calling the constructor
         index = Index.from_corpus(corpus)
-        return cls(corpus, index)  # retrun the constructor when we have yet the index
+        return cls(corpus, index)  # retrun the base constructor of when we have yet the index
 
     def get_from_corpus(self, plist):
         return plist.get_from_corpus(self._corpus)
 
     def spelling_correction(self, norm_words: List[str]):
-        ''' Performs a spelling correction of the normalized words finding the nearest words.
+        ''' Performs a spelling correction of the normalized words finding the nearest words to the given ones.
         '''
         postings = []
         for w in norm_words:
@@ -666,22 +643,29 @@ class IRsystem:
         return plist, self.get_from_corpus(plist)
 
     def answer_trailing_wildcard(self, wildcard):
+        """ Trailing wildcard query
+        """
         plist = []
         for w in self._index._dictionary:
             if starts_with(w.term, wildcard):
                 plist.append(w.posting_list)
         plist = reduce(lambda x, y: x.union(y), plist)
-        return plist, self.get_from_corpus(plist)
+        return self.get_from_corpus(plist)
 
     def answer_leading_wildcard(self, wildcard):
+        """ Leading wildcard query
+        """
         plist = []
         for w in self._index._reverse_dictionary:
             if ends_with(w.term, wildcard):
                 plist.append(w.posting_list)
         plist = reduce(lambda x, y: x.union(y), plist)
-        return plist, self.get_from_corpus(plist)
+        return self.get_from_corpus(plist)
 
     def answer_multiple_wildcards(self, text):
+        """ Multiple wildcard query
+        """
+        text += "$"
         # Fold inside a single wildcard
         i1 = text.index("*")        # the first *
         i2 = text[::-1].index("*")  # the first * of the reversed text
@@ -690,7 +674,6 @@ class IRsystem:
         # Rotate to have a trailing wildcard query
         i = folded.index("*")
         wildcard = folded[i+1:] + folded[:i]
-        print(f"wildcard {wildcard}")
         # Collect all the terms matching the simplified query
         terms_list = []
         for w in self._index._dictionary:
@@ -700,67 +683,26 @@ class IRsystem:
         plist = []
         unfolded = wildcard + text[i1:i3+1]
         query = unfolded.replace("*", "\S*").replace("$", "\$")
-        print(f"query: {query}")
         for t in terms_list:
-            print(t.term, end=" ")
             if re.search(query, t.term):
-                print("Matched")
                 plist.append(t.posting_list)
-            else:
-                print("Not matched")
         plist = reduce(lambda x, y: x.union(y), plist)
-        return plist, self.get_from_corpus(plist)
+        return self.get_from_corpus(plist)
 
-text = "pas*s*er"
-term = "passenger"
-i = text.index("*")
-query = text.replace("*", "\S*")
-print(query, term)
-if re.search(query, term):
-    print("Found")
-
-print(f"text: {text}")
-text += "$"
-i1 = text.index("*")        # the first *
-i2 = text[::-1].index("*")  # the first * of the reversed text
-i3 = len(text) - i2 - 1     # the last *
-folded = text[:i1] + text[i3:]
-print(f"folded: {folded}")
-# Rotate to have a trailing wildcard query
-i = folded.index("*")
-wildcard = folded[i+1:] + folded[:i]
-print(f"wildcard: {wildcard}")
-unfolded = wildcard + text[i1:i3+1]
-print(f"unfolded: {unfolded}")
-query = text.replace("*", "\S*")
-print(f"query: {query}")
-if re.search(query, term):
-    print("Found")
-
-print(re.search("er$pas*", "er$pass"))
-print(re.search("er\$pas*", "er$pass"))
-
-text = "er$pas*s*"
-#term = "er$pasqui"
-term = "er$pass"
-i = text.index("*")
-query = text.replace("*", "\S*").replace("$", "\$")
-print(query, term)
-if re.search(query, term):
-    print("Found")
-else:
-    print("Not found")
-
-def starts_with(word, start):
-    n = len(start)
-    if word[:n] == start:
+def starts_with(word, prefix):
+    """ Checks if the given word starts with the given prefix.
+    """
+    n = len(prefix)
+    if word[:n] == prefix:
         return True
     else:
         return False
 
-def ends_with(word, end):
-    n = len(end)
-    if word[-n:] == end:
+def ends_with(word, suffix):
+    """ Checks if the given word starts with the given suffix.
+    """
+    n = len(suffix)
+    if word[-n:] == suffix:
         return True
     else:
         return False
@@ -768,12 +710,19 @@ def ends_with(word, end):
 """## Queries"""
 
 def print_result(answer: PostingList, spellingCorrection=False):
+    """ To print the result of a query
+    """
     if spellingCorrection: # for a better output
         print()
     for movie in answer:
         print(movie)
 
 def and_query(ir: IRsystem, text: str, spellingCorrection=False, noprint=True):
+    """ AND-query
+    Arguments:
+      spellingCorrection -- if `True` a spelling correction is performed
+      noprint            -- if `True` the result of the query is not printed
+    """
     words = text.split()
     answer = ir.answer_and_query(words, spellingCorrection)  # list of documents
     if not noprint:
@@ -781,6 +730,11 @@ def and_query(ir: IRsystem, text: str, spellingCorrection=False, noprint=True):
     return answer
         
 def or_query(ir: IRsystem, text: str, spellingCorrection=False, noprint=True):
+    """ OR-query
+    Arguments:
+      spellingCorrection -- if `True` a spelling correction is performed
+      noprint            -- if `True` the result of the query is not printed
+    """
     words = text.split()
     answer = ir.answer_or_query(words, spellingCorrection)
     if not noprint:
@@ -788,6 +742,11 @@ def or_query(ir: IRsystem, text: str, spellingCorrection=False, noprint=True):
     return answer
 
 def not_query(ir: IRsystem, text: str, spellingCorrection=False, noprint=True):
+    """ NOT-query
+    Arguments:
+      spellingCorrection -- if `True` a spelling correction is performed
+      noprint            -- if `True` the result of the query is not printed
+    """
     words = text.split()
     answer = ir.answer_not_query(words, spellingCorrection)
     if not noprint:
@@ -795,8 +754,11 @@ def not_query(ir: IRsystem, text: str, spellingCorrection=False, noprint=True):
     return answer
 
 def query(ir: IRsystem, text: str, spellingCorrection=False, noprint=True):
-    """ This function can answer complex queries with 'AND', 'OR' and 'NOT' but without parentheses.
-    E.g. text = "yoda AND darth OR Gandalf NOT love"
+    """ This function can answer complex queries with 'AND', 'OR' and 'NOT', but without parentheses.
+    E.g. text = "yoda AND darth OR Gandalf NOT love".
+    Arguments:
+      spellingCorrection -- if `True` a spelling correction is performed
+      noprint            -- if `True` the result of the query is not printed
     """
     words = text.split()
     if len(words) == 1:
@@ -816,7 +778,10 @@ def query(ir: IRsystem, text: str, spellingCorrection=False, noprint=True):
 def query_with_pars(ir: IRsystem, text: str, spellingCorrection=False, noprint=True):
     """ This function can answer to any type of query, also complex ones. Use 'AND', 'OR' and 'NOT'
     and parenthesis to specify how to combine the words in the query.
-    E.g. text = "(yoda AND darth) OR Gandalf NOT love"
+    E.g. text = "(yoda AND darth) OR Gandalf NOT love".
+    Arguments:
+      spellingCorrection -- if `True` a spelling correction is performed
+      noprint             -- if `True` the result of the query is not printed
     """
     # add a space after '(' and before ')' so to split them into separate tokens
     text = re.sub(r"\(", r'( ', text)
@@ -829,29 +794,29 @@ def query_with_pars(ir: IRsystem, text: str, spellingCorrection=False, noprint=T
         return None
 
     # words_mod = copy.deepcopy(words) # For now not necessary, I don't reuse the array 'words'
-    words_mod = words                  # I write it like this so it is easy to change is 'words' will be needed
+    words_mod = words                  # I write it like this so it is easy to change if 'words' will be needed
     # Wrap the text in two parentheses so to perform the following while one last time, avoiding to repeat code, and compute the whole query
     words_mod.insert(0, "(")
     words_mod.append(")")
     
-    openp = []
-    closep = []
+    rightpar = []   # array of indexes with the positions of the right parentheses
+    leftpar  = []   # array of indexes with the positions of the left parentheses
     for i, w in enumerate(words_mod):
-        if w == "(": openp.append(i)
-        elif w == ")": closep.append(i)
+        if w == "(": rightpar.append(i)
+        elif w == ")": leftpar.append(i)
     
-    if len(openp) != len(closep):
-        print("The number of open parentheses is different from the number of closed parentheses.")
+    if len(rightpar) != len(leftpar):
+        print("The number of right parentheses is different from the number of left parentheses.")
         return None
 
-    while closep:
-        c = closep[0]
+    while leftpar:
+        c = leftpar[0]
         o = None
-        for i in openp:
+        for i in rightpar:
             if i < c:
                 o = i
         #plist = PostingList()  # wrong, since if there are extra parentheses around all the query I overwrite the last plist and I store in words_mod an empty plist
-        # Process the query in these parenthesis, the remove o in openp and c in closep
+        # Process the query in these parentheses, the remove o in rightpar and c in leftpar
         for i, w in enumerate(words_mod[o+1 : c]):
             if w in ['AND', 'OR', 'NOT']:
                 if i == 1:
@@ -874,11 +839,11 @@ def query_with_pars(ir: IRsystem, text: str, spellingCorrection=False, noprint=T
                         plist = ir.answer_query(op = w, postings = plist, postings2 = item2, spellingCorrection=spellingCorrection)
         words_mod[o] = plist
         del words_mod[o+1:c+1]
-        openp = []
-        closep = []
+        rightpar = []
+        leftpar  = []
         for i, w in enumerate(words_mod):
-            if w == "(": openp.append(i)
-            elif w == ")": closep.append(i)
+            if w == "(": rightpar.append(i)
+            elif w == ")": leftpar.append(i)
     
     answer = ir.get_from_corpus(plist)
     if not noprint:
@@ -888,9 +853,9 @@ def query_with_pars(ir: IRsystem, text: str, spellingCorrection=False, noprint=T
 
 """## Phrase queries
 
-### Answering a phrase query with positional indexing
+### Answering a phrase query with positional index
 
-One way to answer a phrase query is to add, for each posting, the set of positions in which the term appear in the document. We perform something like the intersection only that now we have to go inside and check if the two terms appear in adjacent positions. So we search if they are contained in the same document and if they are one after the other.
+One way to answer a **<font color=#00ADEF>phrase query</font>** is to use the **positional index**, which contists in adding, for each posting, the set of positions in which the term appear in the document. We perform something like the intersection only that now we have to go inside and check if the two terms appear in adjacent positions. So we search if they are contained in the same document and if they are one after the other.
 
 Besides, the positional index can be used to support the operators of the form "$\texttt{term}_1 /k \texttt{ term}_2$" with $k$ an integer indicating the maximum number of words that can be between $\texttt{term}_1$ and $\texttt{term}_2$.
 """
@@ -926,7 +891,7 @@ Ho anche una domanda per quanto riguarda l'implementazione. A lezione abbiamo vi
 
 ### Trailing wildcards
 
-In a **trailing wildcard** there is only one wildcard and it is at the end of the word, like **"term\*"**, in which we want everything starting with "term".
+In a **<font color=#00ADEF>trailing wildcard</font>** there is only one wildcard and it is at the end of the word, like **"term\*"**, in which we want everything starting with "term".
 
 To answer the query we can retrieve the posting lists of all the terms that starts with "term" and then perform a union of the results.
 """
@@ -934,34 +899,34 @@ To answer the query we can retrieve the posting lists of all the terms that star
 def trailing_wildcard(ir: IRsystem, text: str, noprint=True):
     wildcard = text.split('*')[0]
     wildcard = normalize(wildcard)
-    _, answer = ir.answer_trailing_wildcard(wildcard)
+    answer = ir.answer_trailing_wildcard(wildcard)
     if not noprint:
         print_result(answer)
     return answer
 
 """### Leading wildcard
 
-In a **leading wildcard** there is only one wildcard and it is at the beginning of the word, like **"*term"**, in which we want everything ending with "term". We can build an additional dictionary in the index which has in alphabetical order the reverse of the words. Then the "leading wildcard" is like an "inverse wildcard" for the reverse dictiornary.
+In a **<font color=#00ADEF>leading wildcard</font>** there is only one wildcard and it is at the beginning of the word, like **"*term"**, in which we want everything ending with "term". We can build an additional dictionary in the index which has in alphabetical order the reverse of the words. Then the "leading wildcard" is like an "inverse wildcard" for the reverse dictiornary.
 """
 
 def leading_wildcard(ir: IRsystem, text: str, noprint=True):
     wildcard = text.split('*')[1]
     wildcard = normalize(wildcard)
-    _, answer = ir.answer_leading_wildcard(wildcard)
+    answer = ir.answer_leading_wildcard(wildcard)
     if not noprint:
         print_result(answer)
     return answer
 
 """### General wildcard queries
 
-Using the “permuterm index” we can reformulate the problem of “one wildcard” as a leading or
+Using the **permuterm index** we can reformulate the problem of "one wildcard" as a leading or
 trailing wildcard problem, and we can also extend the solution to queries with more than one
-wildcard. We insertion a special “end of word” symbol, \$, and we insert all the rotations of the
-word (including the “end of word”) in the dictionary. All the rotations of the same word points to
+wildcard. We insertion a special "end of word" symbol, \$, and we insert all the rotations of the
+word (including the "end of word") in the dictionary. All the rotations of the same word points to
 the same postings list of the initial word.
 
 
-**Managing general wildcard queries.** Given a query (like C\*T), we put the “end of word” at the
+Given a **<font color=#00ADEF>general wildcard</font>** query (like C\*T), we put the “end of word” at the
 end of the query and we rotate the word to have the wildcard at the end. Thus we can have a
 trailing wildcard, that we know how to solve!
 """
@@ -971,24 +936,17 @@ def general_wildcard(ir: IRsystem, text: str, noprint=True):
     i = text.index("*")
     wildcard = text[i+1:] + text[:i]
     wildcard = normalize(wildcard)
-    _, answer = ir.answer_trailing_wildcard(wildcard)
+    answer = ir.answer_trailing_wildcard(wildcard)
     if not noprint:
         print_result(answer)
     return answer
 
 """### Multiple wildcard queries
 
-**Managing multiple wildcard queries.** Given a query (like \*A\*T), we put the "end of word" at the
-end of the query, then we consider the more general query where everything between the first
-and last wildcard is "folded" inside a single wildcard (like \*T\$). The solution of the original query
-are a subset of this more general query! Lastly, we rotate to have a trailing wildcard query. We
-collect all the terms matching the simplified query then we scan the list to remove the ones not
-matching the original query (filtering step). This is more expensive than the other cases but
-multiple wildcards are less common.
+Given a **<font color=#00ADEF>multiple wildcards</font>** query (like \*A\*T), we put the "end of word" at the end of the query, then we consider the more general query where everything between the first and last wildcard is "folded" inside a single wildcard (like \*T\$). Lastly, we rotate to have a trailing wildcard query. We collect all the terms matching the simplified query then we scan the list to remove the ones not matching the original query (*filtering step*). This is more expensive than the other cases but multiple wildcards are less common.
 """
 
 def multiple_wildcards(ir: IRsystem, text: str, noprint=True):
-    text += "$"
     answer = ir.answer_multiple_wildcards(text)
     if not noprint:
         print_result(answer)
@@ -1105,16 +1063,16 @@ assert fyg_or_query == mispelled_or_query
 
 """### NOT queries"""
 
-#a_not_query = not_query(ir, "a", noprint=True)
+a_not_query = not_query(ir, "a", noprint=True)
 
 corpus_set = set(corpus)
 a_query = ir.get_from_corpus(ir._index[normalize("a")])
 a_set = set(a_query)
 a_not_set = corpus_set.difference(a_set)
 
-#assert set(a_not_query) == a_not_set
+assert set(a_not_query) == a_not_set
 
-#lm_not_query = not_query(ir, "love mother", noprint=True)
+lm_not_query = not_query(ir, "love mother", noprint=True)
 
 love_set = set(love_query)
 mother_query = ir.get_from_corpus(ir._index[normalize("mother")])
@@ -1122,20 +1080,20 @@ mother_set = set(mother_query)
 lm_set = love_set.union(mother_set)
 lm_not_set = corpus_set.difference(lm_set)
 
-#assert set(lm_not_query) == lm_not_set
+assert set(lm_not_query) == lm_not_set
 
-#yg_not_query = not_query(ir, "yoda Gandalf", noprint=True)
+yg_not_query = not_query(ir, "yoda Gandalf", noprint=True)
 
 yg_set = yoda_set.union(gandalf_set)
 yg_not_set = corpus_set.difference(yg_set)
 
-#assert set(yg_not_query) == yg_not_set
+assert set(yg_not_query) == yg_not_set
 
 """#### With spelling correction"""
 
-#mispelled_a_not_query = not_query(ir, "aq", spellingCorrection=True, noprint=True)
+mispelled_a_not_query = not_query(ir, "aq", spellingCorrection=True, noprint=True)
 
-#assert a_not_query == mispelled_a_not_query
+assert a_not_query == mispelled_a_not_query
 
 """### Compex queries"""
 
@@ -1242,9 +1200,6 @@ assert yOpgApdOlpNmpOphNap_complex_query == mispelled_yOpgApdOlpNmpOphNap_comple
 
 """### Phrase queries"""
 
-text = "Great Britain"
-gb_posting_list, gb_phrase_query = phrase_query(ir, text, noprint=False)
-
 def check_phrase_query(text, posting_list):
     text = normalize(text)
     words = list(text.split())
@@ -1255,6 +1210,9 @@ def check_phrase_query(text, posting_list):
         tokens = tokenize(corpus[doc])
         for p in pos:
             assert tokens[p:p+l] == words
+
+text = "Great Britain"
+gb_posting_list, gb_phrase_query = phrase_query(ir, text, noprint=False)
 
 check_phrase_query(text, gb_posting_list)
 
@@ -1366,5 +1324,3 @@ assert check_general_wildcards_queries("Gan*f") == gan_f_wildcard_query
 """#### Multiple wildcards queries"""
 
 pas_s_er_wildcard_query = multiple_wildcards(ir, "pas*s*er", noprint=False)
-
-pas_s_er_wildcard_query == pass_er_wildcard_query
