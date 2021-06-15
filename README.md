@@ -19,6 +19,11 @@ The IR system is able to:
 
 - answer wildcards queries using a permuterm index
 
+  - Use the `trailing_wildcards` function to answer to trailing wildcards, like "term\*".
+  - Use the `leading_wildcard` function to answer to leading wildcards, like "\*term".
+  - Use the `general_wildcard` function to answer to general wildcards, like "C\*T".
+  - Use the `multiple_wildcards` function to answer to multiple wildcards, like "\*A\*T".
+
 - perform normalization
 
 - perform on demand spelling correction, using the edit distance
