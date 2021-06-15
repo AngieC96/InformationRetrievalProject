@@ -39,7 +39,12 @@
 % Fixes bad positioning of hats
 \usefonttheme{professionalfonts}%[onlymath]{serif}
 \PassOptionsToPackage{hyphens}{url}\usepackage{hyperref} % to break the links
-
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,  % color of internal links
+    urlcolor=blue,   % color of external links
+    citecolor=blue,  % color of links to bibliography
+}
 
 %%% Metadati
 \graphicspath{{figures/PNG/}{figures/PDF/}{figures/}}
@@ -69,10 +74,151 @@
 %	\tableofcontents
 %\end{frame}
 
+\begin{frame}{Aim of the project}
+
+    Implementation of an Information Retrieval system using the Boolean Model.
+    \bigskip
+    
+    \alert{Programming language:} Python
+    \bigskip
+    
+    \alert{Dataset:} CMU Movie Summary Corpus\\
+    It's a collection of 42,306 movie plot summaries and metadata, available at\\
+    the following \href{http://www.cs.cmu.edu/~ark/personas}{link}.\\
+    \textit{Problem:} some movies are duplicated, I don't know why, so I had to use \texttt{set}s\\
+    to check the queries results.
+    
+    \bigskip
+    
+    The project can be found on \href{https://github.com/AngieC96/InformationRetrievalProject}{GitHub}.
+    
+\end{frame}
+
+\begin{frame}{The IR system}
+
+    It is able to answer \alert{boolean queries with AND, OR, and NOT}. The system is also able to evaluate complex queries, even with many nested parentheses, like
+
+    \texttt{"hello OR ((how AND (are OR you) OR I AND (am AND fine) OR I) AND am AND (sleepy OR hungry) AND cold)"}.
+
+    \begin{itemize}
+        \item[\alert{$\bullet$}] Use the \texttt{and\_query} function to connect all the words in your query text with ANDs.
+        \item[\alert{$\bullet$}] Use the \texttt{or\_query} function to connect all the words in your query text with ORs.
+        \item[\alert{$\bullet$}] Use the \texttt{not\_query} function to connect all the words in your query text with NOTs.
+        \item[\alert{$\bullet$}] Use the \texttt{query} function to answer a query with AND, OR and NOT without parentheses.
+        \item[\alert{$\bullet$}] Use the \texttt{query\_with\_pars} function to answer complex queries with AND, OR or NOT with parentheses, also nested.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{The IR system}
+
+    It can answer \alert{phrase queries} using a positional index and also answer to queries like “$\texttt{term}_1 /k \texttt{ term}_2$”, with $k$ an integer indicating the maximum number of words that can be between $\texttt{term}_1$ and $\texttt{term}_2$.
+
+    It can also answer \alert{wildcards queries} using a permuterm index.
+    
+    \begin{itemize}
+        \item[\alert{$\bullet$}] Use the \texttt{trailing\_wildcards} function to answer to trailing wildcards, like "term*".
+        \item[\alert{$\bullet$}] Use the \texttt{leading\_wildcard} function to answer to leading wildcards, like "*term".
+        \item[\alert{$\bullet$}] Use the \texttt{general\_wildcard} function to answer to general wildcards, like "C*T".
+        \item[\alert{$\bullet$}] Use the \texttt{multiple\_wildcards} function to answer to multiple wildcards, like "*A*T".
+    \end{itemize}
+    
+\end{frame}
+
+\begin{frame}{The IR system}
+
+    It performs \alert{normalization}, removing all the punctuation and the symbols (except the "end of word" symbol \$) and putting everything to lowercase.
+    
+    It can perform on demand \alert{spelling correction}, using the edit distance (for time reasons keeping as correct the first character and searching only among the terms in the index that start with that character, but changing a parameter allows for a search in the entire index).
+
+    I evaluated the IR system on a set of test queries for each functionality, and in addition I checked that the results of the queries where correct using \texttt{assert}s.
+
+\end{frame}
+
+\begin{frame}{Index}
+
+    We have an index [\texttt{\alert{class Index}}] that is a mixture of:
+        \begin{itemize}
+            \item[\alert{$\bullet$}] {\makebox[3.3cm][l]{An inverted index} $\longrightarrow$ \quad the basic index}
+            \item[\alert{$\bullet$}] {\makebox[3.3cm][l]{A positional index} $\longrightarrow$ \quad for phrase queries}
+            \item[\alert{$\bullet$}] {\makebox[3.3cm][l]{A permuterm index} $\longrightarrow$ \quad for wildcards queries}
+        \end{itemize}
+        
+    \medskip
+        
+    
+    I implemented a way to save and load the entire index from disk, to avoid re-indexing when the program starts. To save the index I used \texttt{Pickle}.
+    
+    \alert{Saving the index} makes us save a lot of time: processing the whole index takes around $220s$, while loading it from disk only around $45s$, which is almost five times less.\\
+    Actually, after having implemented everything, processing it takes around $300s$ while loading it takes around $35s$.\\
+
+\end{frame}
+
+% \begin{frame}{Data structure}
+
+%     Python dictionaries aren’t always what you need: the most important case is where you want to store a very large mapping.
+
+%     BTrees are a balanced tree data structure that behave like a mapping but distribute keys throughout a number of tree nodes. The nodes are stored in sorted order. Nodes are then only unpickled and brought into memory as they’re accessed, so the entire tree doesn’t have to occupy memory (unless you really are touching every single key).
+    
+% \end{frame}
+
+\begin{frame}{Positional index}
+
+    Used to answer to \alert{phrase queries}.
+
+    To implement it, I added the list of the positions at which the term appears in the document \texttt{docID} into the \texttt{Posting} class.
+    
+    To answer a phrase query we perform something like the intersection only that now we have to go inside and check if the two terms appear in adjacent positions. So we search if they are contained in the same document and if they are one after the other.
+    
+
+\end{frame}
+
+\begin{frame}{Permuterm index}
+
+    Used to answer to \alert{general wildcard queries}.
+
+    When I create the index I first create a \texttt{Term} with the term, the docID and the position in the document, then if the term is not present in my dictionary (trying to access it gives a \texttt{KeyError}) I create it, then I create all the rotations of the term combined with the "end of word" character \$. If the term is inside the dictionary I update its posting list merging the two terms. When I update the posting list of the "normal" term all the posting lists of the rotated terms are updated, since they are a shallow copy of this posting list.
+    
+    {(\color{green}\Checkedbox} exploiting one of the annoying properties of Python)
+
+\end{frame}
+
+\begin{frame}{Information Retrieval system}
+
+    The Information Retrieval system [\texttt{\alert{class IRsystem}}] contains both the corpus of documents and the index. It also implements the function \texttt{spelling\_correction} to perform the spelling correction.
+    
+    It also contains all the methods to answer to the various queries:
+    \begin{itemize}
+        \item[\alert{$\bullet$}] \texttt{answer\_and\_query}
+        \item[\alert{$\bullet$}] \texttt{answer\_or\_query}
+        \item[\alert{$\bullet$}] \texttt{answer\_not\_query}
+        \item[\alert{$\bullet$}] \texttt{answer\_query}
+        \item[\alert{$\bullet$}] \texttt{answer\_phrase\_query}
+        \item[\alert{$\bullet$}] \texttt{answer\_phrase\_query\_ksteps}
+        \item[\alert{$\bullet$}] \texttt{answer\_trailing\_wildcard}
+        \item[\alert{$\bullet$}] \texttt{answer\_leading\_wildcard}
+        \item[\alert{$\bullet$}] \texttt{answer\_multiple\_wildcards}
+    \end{itemize}
+\end{frame}
+
+% \begin{frame}{Cool implementations}
+
+%     \begin{itemize}
+%         \item[\alert{$\bullet$}] The progress bar
+%         \item[\alert{$\bullet$}] The type hint checking
+%         \item[\alert{$\bullet$}] The binary search in \texttt{InvertedIndex::\_\_getitem\_\_}
+%     \end{itemize}
+
+% \end{frame}
+
+% \begin{frame}{Self-critiques}
+    
+% \end{frame}
+
 {\putbgdark
 \begin{frame}[standout]
 	\begin{center}
-		\Large \uncover<+->{Thank you for your attention!}
+		%\Large \uncover<+->{Thank you for your attention!}
+		\Large \uncover<+->{On to the code!}
 		
 		\Huge\uncover<+->{\Smiley}
 	\end{center}
