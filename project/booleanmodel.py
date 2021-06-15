@@ -7,19 +7,25 @@ Original file is located at
     https://colab.research.google.com/drive/1FKIwIlsGUG0HKftv6VVFOs2JzYjTWecF
 
 # A Boolean Retrieval System
+
+
+The aim of this project is to implement an Information Retrieval system using the Boolean Model.
 """
 
-from functools import total_ordering, reduce  # not essential but reduces the code we have to write
-import csv     # for csv files
-import re      # for regular expressions
-import pickle  # to save the index
+from functools import total_ordering, reduce   # helper functions
+import csv                                     # for csv files
+import re                                      # for regular expressions
+import pickle                                  # to save the index
 import time
 import os.path
 import copy
 
 """## Postings
 
-A `Posting` object is simply the docID of a document. It has a method `get_from_corpus` that given the corpus retrieves the document corresponding to that docID. Then it has some comparison methods to check if two docID are equal, one greater than the other, etc.
+A **<font color=#00ADEF>posting</font>** is an element of the posting list, so it is a DocID associated to
+a specific term. To answer phrase queries we add, for each posting, also the set of positions in which the term appear in the document.
+
+So a `Posting` object contains the docID of a document, stored in the variable `_docID`, and the list of the positions in which the term appear in the document. It has a method `get_from_corpus` that given the corpus retrieves the document corresponding to that docID. It has a method `add` to extend the list of positions. Then it has some comparison methods to check if two docID are equal, one greater than the other, etc.
 """
 
 @total_ordering   # takes a class where we have defined at least the methods `eq` and `gt`/`lt` and defines in a consistent way all the other methods (otherwise we should implement them all by hand)
@@ -246,7 +252,7 @@ class Term:
     def __repr__(self):
         return self.term + ": " + repr(self.posting_list)
 
-"""## Inverted Index"""
+"""## Index"""
 
 # We have to do some step of tokenization and normalization
 
@@ -254,7 +260,7 @@ def normalize(text):
     """ A simple funzion to normalize a text.
     It removes everything that is not a word, a space or an hyphen and downcases all the text.
     """
-    no_punctuation = re.sub(r'[^\w^\s^-]', '', text)  # the text that matches a certain pattern will be substittuted with the second expression. ^\w → not something alphanumeric, ^\s → not some space, ^- → not a dash, replace it with '', the empty string
+    no_punctuation = re.sub(r'[^\w^\s^-^\$]', '', text)  # the text that matches a certain pattern will be substittuted with the second expression. ^\w → not something alphanumeric, ^\s → not some space, ^- → not a dash, replace it with '', the empty string
     downcase = no_punctuation.lower()  # put everything to lower case
     return downcase
 
@@ -295,13 +301,15 @@ def update_progress(progress):
 
 """In an inverted index we store, for each term, the list of documents containing it.
 
-So an `InvertedIndex` object contains a dictionary `_dictionary` with as keys the words themselves and as values the `Term` associated to each word, which, we recall, contains the `PostingList` associated to the word.\
+So an `Index` object contains a dictionary `_dictionary` with as keys the words themselves and as values the `Term` associated to each word, which, we recall, contains the `PostingList` associated to the word.\
 It also stores a list with all the Postings, `complete_plist`, used to answer the NOT queries.
+
+Since our index is both an Inverted Index, a Positional Index and a Permuterm index, we also store a `_reverse_dictionary` ==!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!==
 """
 
 from typing import List
 
-class InvertedIndex:
+class Index:
 
     _dictionary: List
     _reverse_dictionary: List
@@ -310,7 +318,7 @@ class InvertedIndex:
     def __init__(self):
         ''' Empty class constructor.
         Fields:
-          _dictionary    -- the collection of all terms that we have in the inverted index
+          _dictionary    -- the collection of all terms that we have in the index
           _reverse_dictionary
           complete_plist -- PostingList containing all the documents of the corpus
         '''
@@ -318,7 +326,7 @@ class InvertedIndex:
         self._reverse_dictionary = []
         self.complete_plist = PostingList()
         
-    @classmethod  # to have multiple constructors. It's like a static method in Java: you call InvertedIndex.from_corpus()
+    @classmethod  # to have multiple constructors. It's like a static method in Java: you call Index.from_corpus()
     def from_corpus(cls, corpus: list):
         ''' Class constructor processing a corpus. This is the constructor that creates the index from scatch given a corpus of documents.
         '''
@@ -348,14 +356,14 @@ class InvertedIndex:
             # To observe the progressing of our indexing
             update_progress(docID/len(corpus))
         
-        idx = cls()  # we call the constructor of the class InvertedIndex
+        idx = cls()  # we call the constructor of the class Index
         idx._dictionary = sorted(intermediate_dict.values())  # list of all the sorted terms
         idx._reverse_dictionary = sorted(intermediate_dict.values(), key=lambda x: backwards(x.term))
         idx.complete_plist = compl_plist
         return idx
     
     def __getitem__(self, key):
-        ''' Index the inverted index using as keys the Terms.
+        ''' Indexes the index using as keys the Terms.
         '''
         for term in self._dictionary:  # TODO: binary search
             if term.term == key:
@@ -495,21 +503,21 @@ def find_nearest(word, dictionary, keep_first=False):
 
 """## IR System
 
-An `IRsystem` object contains the entire corpus and the `InvertedIndex`.
+An `IRsystem` object contains the entire corpus and the `Index`.
 """
 
 class IRsystem:
 
     _corpus: list
-    _index: InvertedIndex
+    _index: Index
     
-    def __init__(self, corpus: list, index: 'InvertedIndex'):
+    def __init__(self, corpus: list, index: 'Index'):
         self._corpus = corpus
         self._index = index
         
     @classmethod
-    def from_corpus(cls, corpus: list): # generate the entire inverted index calling the constructor
-        index = InvertedIndex.from_corpus(corpus)
+    def from_corpus(cls, corpus: list): # generate the entire index calling the constructor
+        index = Index.from_corpus(corpus)
         return cls(corpus, index)  # retrun the constructor when we have yet the index
 
     def get_from_corpus(self, plist):
@@ -850,6 +858,7 @@ To answer the query we can retrieve the posting lists of all the terms that star
 
 def trailing_wildcard(ir: IRsystem, text: str, noprint=True):
     wildcard = text.split('*')[0]
+    wildcard = normalize(wildcard)
     answer = ir.answer_trailing_wildcard(wildcard)
     if not noprint:
         print_result(answer)
@@ -862,6 +871,7 @@ In a **leading wildcard** there is only one wildcard and it is at the beginning 
 
 def leading_wildcard(ir: IRsystem, text: str, noprint=True):
     wildcard = text.split('*')[1]
+    wildcard = normalize(wildcard)
     answer = ir.answer_leading_wildcard(wildcard)
     if not noprint:
         print_result(answer)
@@ -883,13 +893,9 @@ trailing wildcard, that we know how to solve!
 
 def general_wildcard(ir: IRsystem, text: str, noprint=True):
     text += "$"
-    i = 0
-    while (i in range(len(txt))) and text[-1] != "*":
-        first = text[0:i]
-        second = text[i:]
-        text = second + first
-        i += 1
-    wildcard = text.split('*')[0]
+    i = text.index("*")
+    wildcard = text[i+1:] + text[:i]
+    wildcard = normalize(wildcard)
     answer = ir.answer_trailing_wildcard(wildcard)
     if not noprint:
         print_result(answer)
@@ -908,6 +914,13 @@ while (i in range(len(txt))) and text[-1] != "*":
 print("$" in text)
 print("$" in "pass*er")
 
+text2 = "pass*er$"
+i = text2.index("*")
+print(i)
+text2[i+1:] + text2[:i]
+
+normalize("Gan*f$")
+
 """### Multiple wildcard queries
 
 **Managing multiple wildcard queries.** Given a query (like \*A\*T), we put the "end of word" at the
@@ -920,7 +933,28 @@ multiple wildcards are less common.
 """
 
 def multiple_wildcards(ir: IRsystem, text: str, noprint=True):
-    pass
+    text += "$"
+    # Fold inside a single wildcard
+    i1 = text.index("*")        # the first *
+    i2 = text[::-1].index("*")  # the first * of the reversed text
+    i3 = len(text) - i2 - 1     # the last *
+    folded = text[:i1] + text[i3:]
+    # Rotate to have a trailing wildcard query
+    i = folded.index("*")
+    wildcard = folded[i+1:] + folded[:i]
+    print(f"wildcard {wildcard}")
+    answer = ir.answer_trailing_wildcard(wildcard)
+    if not noprint:
+        print_result(answer)
+    return answer
+
+text2 = "p*ass*er$"
+i1 = text2.index("*")
+i2 = text2[::-1].index("*")
+i3 = len(text2) - i2 - 1
+print(i1, i2, i3)
+print(text2[i1], text2[i3])
+text2[:i1] + text2[i3:]
 
 """## Test queries
 
@@ -953,7 +987,7 @@ if os.path.isfile(filename) and updated:
 else:
     print ("Index file does not exist.")
     tic = time.time()
-    idx = InvertedIndex.from_corpus(corpus)
+    idx = Index.from_corpus(corpus)
     toc = time.time()
     print(f"\n\nTime: {round(toc-tic, 3)}s")
     # save the index
@@ -1182,7 +1216,8 @@ def check_phrase_query(text, posting_list):
         pos = posting._positions
         tokens = tokenize(corpus[doc])
         for p in pos:
-            assert tokens[p:p+l] == words
+            #assert tokens[p:p+l] == words
+            print(tokens[p:p+l], words)
 
 check_phrase_query(text, gb_posting_list)
 
@@ -1217,7 +1252,7 @@ ua_posting_list, ua_phrase_query = phrase_query_ksteps(ir, text, noprint=False)
 We have to use the function `ascii` ([documentation](https://docs.python.org/3/library/functions.html#ascii)) because `==` finds them different.
 """
 
-ascii(ua_posting_list) == ascii(usa_posting_list)
+assert ascii(ua_posting_list) == ascii(usa_posting_list)
 
 text = "New /1 city"
 nc_posting_list, nc_phrase_query = phrase_query_ksteps(ir, text, noprint=False)
@@ -1230,12 +1265,14 @@ nc_posting_list, nc_phrase_query = phrase_query_ksteps(ir, text, noprint=False)
 """
 
 def check_trailing_wildcards_queries(wildcard):
+    print(f"wildcard: {wildcard}")
+    wildcard = normalize(wildcard)
+    print(f"wildcard: {wildcard}")
     i = 0
     while not starts_with(ir._index._dictionary[i].term, wildcard):
         i += 1
     plist = []
     while starts_with(ir._index._dictionary[i].term, wildcard):
-        print(ir._index._dictionary[i].term)
         plist.append(ir._index._dictionary[i].posting_list)
         i += 1
 
@@ -1245,25 +1282,21 @@ def check_trailing_wildcards_queries(wildcard):
 
 abandon_wildcard_query = trailing_wildcard(ir, "abandon*", noprint=False)
 
-abandon_answer = check_trailing_wildcards_queries("abandon")
-
-assert abandon_wildcard_query == abandon_answer
+assert check_trailing_wildcards_queries("abandon") == abandon_wildcard_query
 
 passeng_wildcard_query = trailing_wildcard(ir, "passeng*", noprint=False)
 
-passeng_answer = check_trailing_wildcards_queries("passeng")
-
-assert passeng_wildcard_query == passeng_answer
+assert check_trailing_wildcards_queries("passeng") == passeng_wildcard_query
 
 """#### Leading wildcards"""
 
 def check_leading_wildcards_queries(wildcard):
+    wildcard = normalize(wildcard)
     i = 0
     while not ends_with(ir._index._reverse_dictionary[i].term, wildcard):
         i += 1
     plist = []
     while ends_with(ir._index._reverse_dictionary[i].term, wildcard):
-        print(ir._index._reverse_dictionary[i].term)
         plist.append(ir._index._reverse_dictionary[i].posting_list)
         i += 1
 
@@ -1273,16 +1306,28 @@ def check_leading_wildcards_queries(wildcard):
 
 ssenger_wildcard_query = leading_wildcard(ir, "*ssenger", noprint=False)
 
-ssenger_answer = check_leading_wildcards_queries("ssenger")
-
-assert ssenger_wildcard_query == ssenger_answer
+assert check_leading_wildcards_queries("ssenger") == ssenger_wildcard_query
 
 esk_wildcard_query = leading_wildcard(ir, "*esk", noprint=False)
 
-esk_answer = check_leading_wildcards_queries("esk")
-
-assert esk_wildcard_query == esk_answer
+assert check_leading_wildcards_queries("esk") == esk_wildcard_query
 
 """#### General wildcard queries"""
 
+def check_general_wildcards_queries(text):
+    text += "$"
+    i = text.index("*")
+    wildcard = text[i+1:] + text[:i]
+    return check_trailing_wildcards_queries(wildcard)
+
 pass_er_wildcard_query = general_wildcard(ir, "pass*er", noprint=False)
+
+assert check_general_wildcards_queries("pass*er") == pass_er_wildcard_query
+
+gan_f_wildcard_query = general_wildcard(ir, "Gan*f", noprint=False)
+
+assert check_general_wildcards_queries("Gan*f") == gan_f_wildcard_query
+
+"""#### Multiple wildcards queries"""
+
+p_ass_er_wildcard_query = multiple_wildcards(ir, "p*ass*er", noprint=False)

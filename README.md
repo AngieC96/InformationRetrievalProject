@@ -33,4 +33,4 @@ I also implemented a way to save and load the entire index from disk, to avoid r
 
 ## Dataset
 
-As dataset I used the "CMU Movie Summary Corpus" dataset, which is a collection of 42,306 movie plot summaries and metadata, available at the following [link](http://www.cs.cmu.edu/~ark/personas).
+The dataset I used is the "CMU Movie Summary Corpus" dataset, which is a collection of 42,306 movie plot summaries and metadata, available at the following [link](http://www.cs.cmu.edu/~ark/personas).
