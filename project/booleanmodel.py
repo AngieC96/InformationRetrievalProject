@@ -37,8 +37,8 @@ class Posting:
     def __init__(self, docID: int, pos: list = None):
         """ Class constructor.
         Fields:
-          _docID     -- ID of the document in which the term is contained
-          _positions -- list of the positions in the document in which the term is present
+          _docID      -- ID of the document in which the term is contained
+          _positions  -- list of the positions in the document in which the term is present
         """
         self._docID = docID
         if pos != None:
@@ -49,35 +49,37 @@ class Posting:
     def add(self, pos: int):
         self._positions.append(pos)
     
-    def get_from_corpus(self, corpus):  # return from the corpus the doc corresponding to that docID. In the list you only save the docID, not the all document
+    def get_from_corpus(self, corpus):
         """ Returns the document corresponding to that docID from the corpus.
         """
         return corpus[self._docID]
     
-    def __eq__(self, other: 'Posting') -> bool:  # euqality comparator
-        """ Performs the comparison between this posting and another one.
+    def __eq__(self, other: 'Posting') -> bool:
+        """ Equality comparator: performs the comparison between this posting and another one.
         Since the ordering of the postings is only given by their docID,
         they are equal when their docIDs are equal.
         """
         return self._docID == other._docID
     
-    def __gt__(self, other: 'Posting') -> bool:  # greather than comparator
-        """ As in the case of __eq__, the ordering of postings is given
+    def __gt__(self, other: 'Posting') -> bool:
+        """ Greather than comparator. As in the case of __eq__, the ordering of postings is given
         by the ordering of their docIDs.
         """
         return self._docID > other._docID
-
-    def __hash__(self):
-        return hash(repr(self))
     
     def __repr__(self) -> str:
         """ String representation of the class.
         """
         return str(self._docID) + ", pos:" + str(self._positions)
+    
+    def __hash__(self):
+        return hash(repr(self))
 
 """## Posting Lists
 
-A `PostingList` object is a list of `Posting`s. You can construct an empty `PostingList` with `__init__`, or construct and initialize a `PostingList` directly with one docID with `from_docID`, or you can create a `PostingList` object with an already existing list using `from_posting_list`. Then you can merge two posting list with `merge` (the one in input will be added at the end of the one on which the mehod `merge` is called, without any checking on the total ordering of the list), you can intersect them with `intersection` or you can unify them with `union`. With `get_from_corpus` we can retrieve the documents corresponding to the docID stored in this `PostingList`.
+A **<font color=#00ADEF>posting list</font>** is list of DocIDs associated to a term, so given a term it is the set of doc that contain that term.
+
+So a `PostingList` object is a list of `Posting`s. You can construct an empty `PostingList` with `__init__`, or construct and initialize a `PostingList` directly with one docID with `from_docID`, or you can create a `PostingList` object with an already existing list using `from_posting_list`. Then you can merge two posting list with `merge` (the one in input will be added at the end of the one on which the mehod `merge` is called, without any checking on the total ordering of the list), you can intersect them with `intersection` or you can unify them with `union`. With `get_from_corpus` we can retrieve the documents corresponding to the docID stored in this `PostingList`.
 """
 
 class PostingList:
@@ -87,7 +89,7 @@ class PostingList:
     def __init__(self):
         """ Class constructor.
         """
-        self._postings = []    # it has as an attribute a list of posting
+        self._postings = []    # list of postings
         
     @classmethod     # to define another constructor. It will return another PostingList like a constructor
     def from_docID(cls, docID, pos = None) -> 'PostingList':
@@ -105,10 +107,10 @@ class PostingList:
         """ A posting list can also be constructed by using another posting list.
         """
         plist = cls()
-        plist._postings = postingList   # we use it as the postins of this PostingList
+        plist._postings = postingList   # we use it as the postings of this PostingList
         return plist
     
-    def merge(self, other: 'PostingList'):  # we have to merge postinglists
+    def merge(self, other: 'PostingList'):
         """ Merges the other posting list to this one in a desctructive
         way, i.e., modifying the current posting list. This method assumes
         that all the docIDs of the second list are higher than the ones
@@ -117,7 +119,7 @@ class PostingList:
         discarded.
         """
         i = 0
-        last = self._postings[-1]   # the last element of the current postinglist
+        last = self._postings[-1]   # the last element of the current posting list
         while (i < len(other._postings) and last == other._postings[i]):  # we can have the same docID multiple times (the term is present multiple times in the document) and when we merge them we don't want it multiple times
             if last._positions:
                 last._positions.extend(other._postings[i]._positions)
@@ -190,7 +192,10 @@ class PostingList:
                 j += 1
         return PostingList.from_posting_list(match)
     
-    def get_from_corpus(self, corpus):   # used when we have a posting list that is the result of a query, but I don't want the docID, I want the docs!
+    def get_from_corpus(self, corpus):
+        """ Used to retrieve the documents from the docIDs, like when we have a
+        posting list that is the result of a query.
+        """
         return list(map(lambda x: x.get_from_corpus(corpus), self._postings))  # I return a list of documents
     
     def __getitem__(self, key):
@@ -221,7 +226,7 @@ class Term:
         self.posting_list = None
     
     @classmethod
-    def given_docid(cls, term: str, docID: int, pos: int):   # we create a term with a DocID, we sort them and we merge the equal terms
+    def given_docid(cls, term: str, docID: int, pos: int):
         t = cls()
         t.term = term
         t.posting_list = PostingList.from_docID(docID, pos)
@@ -234,14 +239,14 @@ class Term:
         t.posting_list = postinglist
         return t
         
-    def merge(self, other: 'Term'):   # when we merge two terms
+    def merge(self, other: 'Term'):
         """ Merges (destructively) this term and the corresponding posting list
         with another equal term and its corrsponding posting list.
         """
         if (self.term == other.term): # cannot merge posting lists with different terms!
-            self.posting_list.merge(other.posting_list)  # merge the current posting list with the one of the other
+            self.posting_list.merge(other.posting_list)
         else: 
-            raise ImpossibleMergeError # (some kind of error) error of impossible merge
+            raise ImpossibleMergeError
             
     def __eq__(self, other: 'Term'):
         return self.term == other.term
@@ -254,14 +259,14 @@ class Term:
 
 """## Index"""
 
-# We have to do some step of tokenization and normalization
-
 def normalize(text):
     """ A simple funzion to normalize a text.
-    It removes everything that is not a word, a space or an hyphen and downcases all the text.
+    It removes everything that is not a word (^\w → not something alphanumeric),
+    a space (^\s → not some space), an hyphen (^- → not a dash) or the "end of word" symbol $
+    (^\$ → not the "end of word" symbol) and downcases all the text.
     """
-    no_punctuation = re.sub(r'[^\w^\s^-^\$]', '', text)  # the text that matches a certain pattern will be substittuted with the second expression. ^\w → not something alphanumeric, ^\s → not some space, ^- → not a dash, replace it with '', the empty string
-    downcase = no_punctuation.lower()  # put everything to lower case
+    no_punctuation = re.sub(r'[^\w^\s^-^\$]', '', text)  # the text that matches a certain pattern will be substittuted with the empty string ''
+    downcase = no_punctuation.lower()                    # put everything to lower case
     return downcase
 
 def tokenize(movie: 'MovieDescription') -> list:
@@ -666,7 +671,7 @@ class IRsystem:
             if starts_with(w.term, wildcard):
                 plist.append(w.posting_list)
         plist = reduce(lambda x, y: x.union(y), plist)
-        return self.get_from_corpus(plist)
+        return plist, self.get_from_corpus(plist)
 
     def answer_leading_wildcard(self, wildcard):
         plist = []
@@ -674,7 +679,77 @@ class IRsystem:
             if ends_with(w.term, wildcard):
                 plist.append(w.posting_list)
         plist = reduce(lambda x, y: x.union(y), plist)
-        return self.get_from_corpus(plist)
+        return plist, self.get_from_corpus(plist)
+
+    def answer_multiple_wildcards(self, text):
+        # Fold inside a single wildcard
+        i1 = text.index("*")        # the first *
+        i2 = text[::-1].index("*")  # the first * of the reversed text
+        i3 = len(text) - i2 - 1     # the last *
+        folded = text[:i1] + text[i3:]
+        # Rotate to have a trailing wildcard query
+        i = folded.index("*")
+        wildcard = folded[i+1:] + folded[:i]
+        print(f"wildcard {wildcard}")
+        # Collect all the terms matching the simplified query
+        terms_list = []
+        for w in self._index._dictionary:
+            if starts_with(w.term, wildcard):
+                terms_list.append(w)
+        # Filtering step
+        plist = []
+        unfolded = wildcard + text[i1:i3+1]
+        query = unfolded.replace("*", "\S*").replace("$", "\$")
+        print(f"query: {query}")
+        for t in terms_list:
+            print(t.term, end=" ")
+            if re.search(query, t.term):
+                print("Matched")
+                plist.append(t.posting_list)
+            else:
+                print("Not matched")
+        plist = reduce(lambda x, y: x.union(y), plist)
+        return plist, self.get_from_corpus(plist)
+
+text = "pas*s*er"
+term = "passenger"
+i = text.index("*")
+query = text.replace("*", "\S*")
+print(query, term)
+if re.search(query, term):
+    print("Found")
+
+print(f"text: {text}")
+text += "$"
+i1 = text.index("*")        # the first *
+i2 = text[::-1].index("*")  # the first * of the reversed text
+i3 = len(text) - i2 - 1     # the last *
+folded = text[:i1] + text[i3:]
+print(f"folded: {folded}")
+# Rotate to have a trailing wildcard query
+i = folded.index("*")
+wildcard = folded[i+1:] + folded[:i]
+print(f"wildcard: {wildcard}")
+unfolded = wildcard + text[i1:i3+1]
+print(f"unfolded: {unfolded}")
+query = text.replace("*", "\S*")
+print(f"query: {query}")
+if re.search(query, term):
+    print("Found")
+
+print(re.search("er$pas*", "er$pass"))
+print(re.search("er\$pas*", "er$pass"))
+
+text = "er$pas*s*"
+#term = "er$pasqui"
+term = "er$pass"
+i = text.index("*")
+query = text.replace("*", "\S*").replace("$", "\$")
+print(query, term)
+if re.search(query, term):
+    print("Found")
+else:
+    print("Not found")
 
 def starts_with(word, start):
     n = len(start)
@@ -859,7 +934,7 @@ To answer the query we can retrieve the posting lists of all the terms that star
 def trailing_wildcard(ir: IRsystem, text: str, noprint=True):
     wildcard = text.split('*')[0]
     wildcard = normalize(wildcard)
-    answer = ir.answer_trailing_wildcard(wildcard)
+    _, answer = ir.answer_trailing_wildcard(wildcard)
     if not noprint:
         print_result(answer)
     return answer
@@ -872,7 +947,7 @@ In a **leading wildcard** there is only one wildcard and it is at the beginning 
 def leading_wildcard(ir: IRsystem, text: str, noprint=True):
     wildcard = text.split('*')[1]
     wildcard = normalize(wildcard)
-    answer = ir.answer_leading_wildcard(wildcard)
+    _, answer = ir.answer_leading_wildcard(wildcard)
     if not noprint:
         print_result(answer)
     return answer
@@ -896,30 +971,10 @@ def general_wildcard(ir: IRsystem, text: str, noprint=True):
     i = text.index("*")
     wildcard = text[i+1:] + text[:i]
     wildcard = normalize(wildcard)
-    answer = ir.answer_trailing_wildcard(wildcard)
+    _, answer = ir.answer_trailing_wildcard(wildcard)
     if not noprint:
         print_result(answer)
     return answer
-
-text = "pass*er"
-text += "$"
-i = 0
-while (i in range(len(txt))) and text[-1] != "*":
-    first = text[0:i]
-    second = text[i:]
-    text = second + first
-    print(text)
-    i += 1
-
-print("$" in text)
-print("$" in "pass*er")
-
-text2 = "pass*er$"
-i = text2.index("*")
-print(i)
-text2[i+1:] + text2[:i]
-
-normalize("Gan*f$")
 
 """### Multiple wildcard queries
 
@@ -934,27 +989,10 @@ multiple wildcards are less common.
 
 def multiple_wildcards(ir: IRsystem, text: str, noprint=True):
     text += "$"
-    # Fold inside a single wildcard
-    i1 = text.index("*")        # the first *
-    i2 = text[::-1].index("*")  # the first * of the reversed text
-    i3 = len(text) - i2 - 1     # the last *
-    folded = text[:i1] + text[i3:]
-    # Rotate to have a trailing wildcard query
-    i = folded.index("*")
-    wildcard = folded[i+1:] + folded[:i]
-    print(f"wildcard {wildcard}")
-    answer = ir.answer_trailing_wildcard(wildcard)
+    answer = ir.answer_multiple_wildcards(text)
     if not noprint:
         print_result(answer)
     return answer
-
-text2 = "p*ass*er$"
-i1 = text2.index("*")
-i2 = text2[::-1].index("*")
-i3 = len(text2) - i2 - 1
-print(i1, i2, i3)
-print(text2[i1], text2[i3])
-text2[:i1] + text2[i3:]
 
 """## Test queries
 
@@ -1216,8 +1254,7 @@ def check_phrase_query(text, posting_list):
         pos = posting._positions
         tokens = tokenize(corpus[doc])
         for p in pos:
-            #assert tokens[p:p+l] == words
-            print(tokens[p:p+l], words)
+            assert tokens[p:p+l] == words
 
 check_phrase_query(text, gb_posting_list)
 
@@ -1265,9 +1302,7 @@ nc_posting_list, nc_phrase_query = phrase_query_ksteps(ir, text, noprint=False)
 """
 
 def check_trailing_wildcards_queries(wildcard):
-    print(f"wildcard: {wildcard}")
     wildcard = normalize(wildcard)
-    print(f"wildcard: {wildcard}")
     i = 0
     while not starts_with(ir._index._dictionary[i].term, wildcard):
         i += 1
@@ -1330,4 +1365,6 @@ assert check_general_wildcards_queries("Gan*f") == gan_f_wildcard_query
 
 """#### Multiple wildcards queries"""
 
-p_ass_er_wildcard_query = multiple_wildcards(ir, "p*ass*er", noprint=False)
+pas_s_er_wildcard_query = multiple_wildcards(ir, "pas*s*er", noprint=False)
+
+pas_s_er_wildcard_query == pass_er_wildcard_query
