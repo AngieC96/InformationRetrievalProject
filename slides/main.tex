@@ -138,9 +138,9 @@
 
     We have an index [\texttt{\alert{class Index}}] that is a mixture of:
         \begin{itemize}
-            \item[\alert{$\bullet$}] {\makebox[3.3cm][l]{An inverted index} $\longrightarrow$ \quad the basic index}
-            \item[\alert{$\bullet$}] {\makebox[3.3cm][l]{A positional index} $\longrightarrow$ \quad for phrase queries}
-            \item[\alert{$\bullet$}] {\makebox[3.3cm][l]{A permuterm index} $\longrightarrow$ \quad for wildcards queries}
+            \item[\alert{$\bullet$}] {\makebox[3.3cm][l]{An \emph{inverted index}} $\longrightarrow$ \quad the basic index}
+            \item[\alert{$\bullet$}] {\makebox[3.3cm][l]{A \emph{positional index}} $\longrightarrow$ \quad for phrase queries}
+            \item[\alert{$\bullet$}] {\makebox[3.3cm][l]{A \emph{permuterm index}} $\longrightarrow$ \quad for wildcards queries}
         \end{itemize}
         
     \medskip
@@ -211,8 +211,22 @@
 % \end{frame}
 
 % \begin{frame}{Self-critiques}
+\begin{frame}{Improvements}
+
+    There are some features one could implement to extend the project:
+
+    \begin{itemize}
+        \item[\alert{$\bullet$}] \emph{Optimisation of boolean queries.}\\
+        Evaluate the terms from the one with the shorter postings list to the largest.
+        \smallskip
+        \item[\alert{$\bullet$}] \emph{Ranked retrieval.}\\
+        Rank the documents according to how relevant they are.
+        \smallskip
+        \item[\alert{$\bullet$}] Use \emph{standard test collections} to perform benchmarks.\\
+        So to be able to compute precision and recall and display the precision-recall curve.
+    \end{itemize}
     
-% \end{frame}
+\end{frame}
 
 {\putbgdark
 \begin{frame}[standout]
